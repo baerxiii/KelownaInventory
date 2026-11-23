@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LockerGrid 3D — Field Tech Inventory & Spatial Manager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#090d16',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbars for Industrial Sleekness */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+        /* Range input styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Top Telemetry & Action Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 z-20 shrink-0">
+        <!-- Brand & Locker ID -->
+        <div class="flex items-center gap-3">
+            <div class="bg-sky-500/10 border border-sky-500/30 p-2 rounded-lg text-sky-400">
+                <i data-lucide="box" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-bold text-base tracking-tight text-white">LOCKERGRID <span class="text-sky-400 font-mono text-xs px-1.5 py-0.5 bg-sky-500/10 rounded border border-sky-500/20">10'×10'×10'</span></h1>
+                </div>
+                <p class="text-xs text-slate-400">Unit #402 • Regional Field Depot (120" × 120" × 120")</p>
+            </div>
+        </div>
+
+        <!-- Live Space & Activity Metrics -->
+        <div class="flex items-center gap-4 md:gap-6 bg-slate-950/60 border border-slate-800/80 px-4 py-1.5 rounded-xl">
+            <div class="flex flex-col">
+                <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total Boxes</span>
+                <span id="stat-boxes" class="font-mono text-sm font-bold text-white">0</span>
+            </div>
+            <div class="h-6 w-px bg-slate-800"></div>
+            <div class="flex flex-col">
+                <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Volume Used</span>
+                <div class="flex items-center gap-2">
+                    <span id="stat-volume" class="font-mono text-sm font-bold text-sky-400">0.0 / 1,000 ft³</span>
+                    <span id="stat-percent" class="text-xs font-mono px-1.5 py-0.2 bg-slate-800 rounded text-slate-300">0%</span>
+                </div>
+            </div>
+            <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+            <div class="hidden sm:flex flex-col">
+                <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">3rd-Party Tech Status</span>
+                <span id="stat-3p" class="font-mono text-xs font-medium text-amber-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="stat-3p-text">1 Pickup Kit Staged</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Data Backup & Reset Controls -->
+        <div class="flex items-center gap-2">
+            <button onclick="exportData()" title="Export JSON Backup" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span class="hidden md:inline">Backup</span>
+            </button>
+            <label title="Import JSON Backup" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition cursor-pointer">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                <span class="hidden md:inline">Restore</span>
+                <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+            </label>
+            <button onclick="confirmResetDemo()" title="Reset to Sample Layout" class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/60 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 text-xs font-medium rounded-lg border border-slate-800 hover:border-rose-800/50 transition">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace: 3D Viewport + Control Sidebar -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <!-- Left / Top: 3D Interactive Locker Viewport -->
+        <main class="relative flex-1 bg-slate-950 min-h-[45vh] lg:min-h-0 flex flex-col">
+            <div id="canvas-container" class="flex-1"></div>
+
+            <!-- Hover Tooltip (Floating) -->
+            <div id="hover-tooltip" class="pointer-events-none fixed z-50 hidden bg-slate-900/95 backdrop-blur-md border border-slate-700 shadow-2xl rounded-xl p-3 text-xs w-60 transition-opacity duration-75">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                    <span id="tt-category" class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300">Parts</span>
+                    <span id="tt-sku" class="font-mono text-slate-400 text-[11px]">SKU-000</span>
+                </div>
+                <div id="tt-name" class="font-bold text-sm text-white truncate mb-1">Item Name</div>
+                <div class="grid grid-cols-2 gap-1 text-slate-300 font-mono text-[11px] bg-slate-950/70 p-1.5 rounded-lg border border-slate-800">
+                    <div>Qty: <span id="tt-qty" class="text-white font-semibold">0</span></div>
+                    <div>Dim: <span id="tt-dim" class="text-white font-semibold">0×0×0"</span></div>
+                    <div class="col-span-2 text-slate-400">Pos: <span id="tt-pos" class="text-slate-200">X:0 Y:0 Z:0</span></div>
+                </div>
+            </div>
+
+            <!-- Top-Left Camera & View Controls Overlay -->
+            <div class="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 z-10">
+                <div class="bg-slate-900/90 backdrop-blur border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-lg">
+                    <button onclick="setCameraView('iso')" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition" data-view="iso">Isometric</button>
+                    <button onclick="setCameraView('front')" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="front">Door / Front</button>
+                    <button onclick="setCameraView('top')" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="top">Top-Down</button>
+                    <button onclick="setCameraView('interior')" class="cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="interior">Interior</button>
+                </div>
+
+                <!-- Optional Zone/Shelf Guides Toggle -->
+                <button id="toggle-zones-btn" onclick="toggleZoneGuides()" class="bg-slate-900/90 backdrop-blur border border-slate-800 hover:border-slate-700 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 flex items-center gap-1.5 shadow-lg transition">
+                    <i data-lucide="grid" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Floor Zones: <strong id="zones-status" class="text-emerald-400">ON</strong></span>
+                </button>
+            </div>
+
+            <!-- Bottom-Left Legend / Orientation Helper -->
+            <div class="absolute bottom-3 left-3 pointer-events-none hidden sm:flex items-center gap-3 bg-slate-900/85 backdrop-blur border border-slate-800/90 px-3 py-2 rounded-xl text-[11px] text-slate-300">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Roll-Up Door (Front +Z)</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block"></span> 3rd-Party Pickup Zone</span>
+                <span class="text-slate-500">|</span>
+                <span class="text-slate-400">Left-Drag: Orbit • Right-Drag: Pan • Scroll: Zoom • Click Box: Inspect</span>
+            </div>
+        </main>
+
+        <!-- Right Sidebar: Inventory Management, Add Box, Inspector & Activity Log -->
+        <aside class="w-full lg:w-[430px] xl:w-[460px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[55vh] lg:h-full shrink-0 z-10">
+
+            <!-- Sidebar Navigation Tabs -->
+            <div class="grid grid-cols-3 border-b border-slate-800 bg-slate-950/50 p-1.5 gap-1 shrink-0">
+                <button onclick="switchTab('inventory')" id="tab-btn-inventory" class="tab-btn flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold bg-slate-800 text-white shadow">
+                    <i data-lucide="package" class="w-3.5 h-3.5 text-sky-400"></i>
+                    <span>Inventory (<span id="tab-inv-count">0</span>)</span>
+                </button>
+                <button onclick="switchTab('add')" id="tab-btn-add" class="tab-btn flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition">
+                    <i data-lucide="plus-square" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span>Add Box</span>
+                </button>
+                <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition">
+                    <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Tech Log</span>
+                </button>
+            </div>
+
+            <!-- Toast Notification Banner inside Sidebar -->
+            <div id="toast-banner" class="hidden mx-3 mt-3 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border">
+                <span id="toast-msg">Notification</span>
+                <button onclick="hideToast()" class="text-current opacity-70 hover:opacity-100"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+            </div>
+
+            <!-- TAB 1: INVENTORY LIST & SELECTED BOX INSPECTOR -->
+            <div id="panel-inventory" class="flex-1 flex flex-col overflow-hidden">
+                <!-- Search & Category Filter -->
+                <div class="p-3 border-b border-slate-800 space-y-2 shrink-0 bg-slate-900">
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                        <input type="text" id="search-input" oninput="renderInventoryList()" placeholder="Search item name, SKU, or notes..." class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none">
+                    </div>
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1">
+                        <button onclick="setCategoryFilter('ALL')" class="cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 whitespace-nowrap" data-cat="ALL">All</button>
+                        <button onclick="setCategoryFilter('Parts')" class="cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Parts">Parts</button>
+                        <button onclick="setCategoryFilter('Third-Party Pickup')" class="cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Third-Party Pickup">3rd-Party Pickup</button>
+                        <button onclick="setCategoryFilter('Tools')" class="cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Tools">Tools</button>
+                        <button onclick="setCategoryFilter('Consumables')" class="cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Consumables">Consumables</button>
+                        <button onclick="setCategoryFilter('Returns/RMA')" class="cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Returns/RMA">RMA</button>
+                    </div>
+                </div>
+
+                <!-- Scrollable Area: Selected Box Inspector (when active) + Box Cards -->
+                <div class="flex-1 overflow-y-auto p-3 space-y-3">
+
+                    <!-- ACTIVE BOX INSPECTOR CARD (Hidden until a box is clicked) -->
+                    <div id="box-inspector" class="hidden bg-slate-950 border-2 border-sky-500/50 rounded-xl p-3.5 space-y-3 shadow-xl">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span id="insp-badge" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-500/20 text-sky-300">Category</span>
+                                    <span id="insp-sku" class="font-mono text-xs text-slate-400">SKU-123</span>
+                                </div>
+                                <h3 id="insp-name" class="font-bold text-sm text-white mt-1">Selected Box Name</h3>
+                            </div>
+                            <button onclick="deselectBox()" class="p-1 text-slate-400 hover:text-white bg-slate-900 rounded-lg border border-slate-800">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- Quick Stock & Rotate Actions -->
+                        <div class="grid grid-cols-2 gap-2 bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                            <div>
+                                <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">Quantity in Box</label>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="adjustSelectedQty(-1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">-</button>
+                                    <input type="number" id="insp-qty" onchange="updateSelectedQtyDirect(this.value)" class="w-14 bg-slate-950 border border-slate-700 rounded text-center font-mono text-xs py-1 text-white">
+                                    <button onclick="adjustSelectedQty(1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">+</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">Orientation & Stack</label>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="rotateSelectedBox()" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 border border-slate-700" title="Rotate 90°">
+                                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-sky-400"></i> 90°
+                                    </button>
+                                    <button onclick="autoStackSelectedBox()" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 border border-slate-700" title="Auto-Snap to Open Spot">
+                                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Snap
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3D Position Sliders (Inches from Back-Left-Floor Corner) -->
+                        <div class="space-y-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+                            <div class="flex items-center justify-between text-[11px]">
+                                <span class="font-semibold text-slate-300">3D Coordinates (inches)</span>
+                                <span id="insp-dims-label" class="font-mono text-slate-400">24"W × 18"D × 18"H</span>
+                            </div>
+
+                            <!-- X Slider -->
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="w-14 font-mono text-slate-400">X (L/R):</span>
+                                <input type="range" id="insp-x" min="0" max="120" step="1" oninput="moveSelectedBox('x', this.value)" class="flex-1">
+                                <span id="insp-x-val" class="w-10 text-right font-mono text-sky-300">0"</span>
+                            </div>
+                            <!-- Z Slider -->
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="w-14 font-mono text-slate-400">Z (B/F):</span>
+                                <input type="range" id="insp-z" min="0" max="120" step="1" oninput="moveSelectedBox('z', this.value)" class="flex-1">
+                                <span id="insp-z-val" class="w-10 text-right font-mono text-sky-300">0"</span>
+                            </div>
+                            <!-- Y Slider -->
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="w-14 font-mono text-slate-400">Y (Hgt):</span>
+                                <input type="range" id="insp-y" min="0" max="120" step="1" oninput="moveSelectedBox('y', this.value)" class="flex-1">
+                                <span id="insp-y-val" class="w-10 text-right font-mono text-sky-300">0"</span>
+                            </div>
+                        </div>
+
+                        <!-- Technician / 3rd-Party Check-Out Action -->
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-2">
+                            <div class="text-[11px] font-semibold text-amber-400 flex items-center gap-1.5">
+                                <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+                                <span>Log Part Pull / 3rd-Party Access</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <select id="log-tech-select" class="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none">
+                                    <option value="Self (Lead Tech)">Self (Lead Tech)</option>
+                                    <option value="3rd-Party Tech">3rd-Party Tech</option>
+                                </select>
+                                <select id="log-action-select" class="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none">
+                                    <option value="Pulled Parts">Pulled Parts (-Qty)</option>
+                                    <option value="Restocked">Restocked (+Qty)</option>
+                                    <option value="Checked Out Whole Box">Took Whole Box</option>
+                                </select>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <input type="number" id="log-qty-input" value="1" min="1" class="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs font-mono text-white" title="Quantity">
+                                <input type="text" id="log-note-input" placeholder="Work Order # or note..." class="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-500">
+                                <button onclick="submitBoxActivityLog()" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded transition">Log</button>
+                            </div>
+                        </div>
+
+                        <!-- Notes & Delete -->
+                        <div class="flex items-center justify-between gap-2 pt-1">
+                            <p id="insp-notes" class="text-[11px] text-slate-400 italic truncate flex-1">No notes.</p>
+                            <button onclick="deleteSelectedBox()" class="px-2.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-lg text-xs font-medium flex items-center gap-1 transition">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Inventory Items List -->
+                    <div id="inventory-list" class="space-y-2">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: ADD NEW BOX FORM -->
+            <div id="panel-add" class="hidden flex-1 overflow-y-auto p-4 space-y-3.5">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-white">Add New Box to Locker</h2>
+                    <!-- Inches vs Feet Toggle -->
+                    <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5 text-[11px]">
+                        <button type="button" id="unit-in-btn" onclick="setDimensionUnit('in')" class="px-2 py-1 rounded-md bg-sky-500/20 text-sky-300 font-semibold">Inches (")</button>
+                        <button type="button" id="unit-ft-btn" onclick="setDimensionUnit('ft')" class="px-2 py-1 rounded-md text-slate-400 hover:text-white">Feet (')</button>
+                    </div>
+                </div>
+
+                <form id="add-box-form" onsubmit="handleAddBox(event)" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Box Label / Item Name *</label>
+                        <input type="text" id="new-name" required placeholder="e.g., Honeywell Zone Valves" class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Part # / SKU</label>
+                            <input type="text" id="new-sku" placeholder="e.g., V8043E1012" class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-2 text-xs font-mono text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Quantity Inside</label>
+                            <input type="number" id="new-qty" value="1" min="0" required class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-2 text-xs font-mono text-white outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Category</label>
+                            <select id="new-category" onchange="autoColorForCategory(this.value)" class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-2.5 py-2 text-xs text-white outline-none">
+                                <option value="Parts">Parts</option>
+                                <option value="Third-Party Pickup">Third-Party Pickup</option>
+                                <option value="Tools">Tools</option>
+                                <option value="Consumables">Consumables</option>
+                                <option value="Returns/RMA">Returns/RMA</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Box Color Tag</label>
+                            <div class="flex items-center gap-1.5 pt-1" id="color-swatches">
+                                <button type="button" onclick="selectColor('#38bdf8')" data-color="#38bdf8" class="color-swatch w-6 h-6 rounded-full bg-[#38bdf8] ring-2 ring-white"></button>
+                                <button type="button" onclick="selectColor('#f59e0b')" data-color="#f59e0b" class="color-swatch w-6 h-6 rounded-full bg-[#f59e0b] opacity-70 hover:opacity-100"></button>
+                                <button type="button" onclick="selectColor('#10b981')" data-color="#10b981" class="color-swatch w-6 h-6 rounded-full bg-[#10b981] opacity-70 hover:opacity-100"></button>
+                                <button type="button" onclick="selectColor('#a855f7')" data-color="#a855f7" class="color-swatch w-6 h-6 rounded-full bg-[#a855f7] opacity-70 hover:opacity-100"></button>
+                                <button type="button" onclick="selectColor('#f43f5e')" data-color="#f43f5e" class="color-swatch w-6 h-6 rounded-full bg-[#f43f5e] opacity-70 hover:opacity-100"></button>
+                                <button type="button" onclick="selectColor('#d97706')" data-color="#d97706" class="color-swatch w-6 h-6 rounded-full bg-[#d97706] opacity-70 hover:opacity-100" title="Cardboard"></button>
+                            </div>
+                            <input type="hidden" id="new-color" value="#38bdf8">
+                        </div>
+                    </div>
+
+                    <!-- Box Dimensions -->
+                    <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-300">Box Dimensions (<span id="dim-unit-label">inches</span>)</span>
+                            <span class="text-[11px] text-slate-500">Max 120" (10 ft)</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[10px] text-slate-400 mb-0.5">Width (X)</label>
+                                <input type="number" id="new-w" value="24" step="any" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-slate-400 mb-0.5">Depth (Z)</label>
+                                <input type="number" id="new-d" value="18" step="any" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-slate-400 mb-0.5">Height (Y)</label>
+                                <input type="number" id="new-h" value="18" step="any" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Placement Strategy -->
+                    <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-300">Placement Mode</span>
+                            <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs text-sky-400 font-medium">
+                                <input type="checkbox" id="auto-place-check" checked onchange="toggleManualCoords(this.checked)" class="rounded bg-slate-800 border-slate-700 text-sky-500">
+                                <span>Smart Auto-Place / Stack</span>
+                            </label>
+                        </div>
+
+                        <div id="manual-coords-fields" class="hidden grid grid-cols-3 gap-2 pt-1">
+                            <div>
+                                <label class="block text-[10px] text-slate-400 mb-0.5">Pos X (in)</label>
+                                <input type="number" id="new-x" value="0" min="0" max="120" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-slate-400 mb-0.5">Pos Z (in)</label>
+                                <input type="number" id="new-z" value="0" min="0" max="120" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-slate-400 mb-0.5">Pos Y (in)</label>
+                                <input type="number" id="new-y" value="0" min="0" max="120" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white">
+                            </div>
+                        </div>
+                        <p id="auto-place-hint" class="text-[11px] text-slate-400 leading-relaxed">
+                            Automatically finds an open floor slot or neatly stacks on existing boxes without overlapping. 3rd-Party Pickup items prioritize the front door zone.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Notes / Shelf Instructions</label>
+                        <input type="text" id="new-notes" placeholder="e.g., Heavy - keep on bottom tier" class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                    </div>
+
+                    <button type="submit" class="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 transition">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                        <span>Add Box to 3D Locker</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- TAB 3: TECHNICIAN & 3RD-PARTY ACCESS LOG -->
+            <div id="panel-logs" class="hidden flex-1 flex flex-col overflow-hidden">
+                <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900 shrink-0">
+                    <div>
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Chain of Custody & Access Log</h2>
+                        <p class="text-[11px] text-slate-400">Tracks Self & 3rd-Party tech pulls/restocks</p>
+                    </div>
+                    <button onclick="clearLogs()" class="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 rounded bg-slate-800/60">Clear</button>
+                </div>
+                <div id="activity-log-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div class="flex items-center gap-3 text-amber-400">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                <h3 class="font-bold text-base text-white">Reset Locker Layout?</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                This will replace your current inventory with the default sample field technician locker layout. Consider exporting a JSON backup first.
+            </p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeConfirmModal()" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200">Cancel</button>
+                <button onclick="executeResetDemo()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white">Reset to Sample</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * LOCKERGRID 3D — FIELD TECHNICIAN INVENTORY MANAGEMENT SYSTEM
+         * ============================================================================
+         * Coordinate System:
+         * - Locker dimensions: 120" (W / X) x 120" (H / Y) x 120" (D / Z)
+         * - Origin (0, 0, 0) in user/logical coordinates is the Back-Left-Floor corner:
+         *     X: 0" (Left Wall) -> 120" (Right Wall)
+         *     Y: 0" (Floor)     -> 120" (Ceiling)
+         *     Z: 0" (Back Wall) -> 120" (Front Roll-up Door)
+         * - In Three.js world coordinates, the locker is centered at (0, 60, 0) so
+         *   worldX = logicalX + boxW/2 - 60
+         *   worldY = logicalY + boxH/2
+         *   worldZ = logicalZ + boxD/2 - 60
+         */
+
+        const LOCKER_SIZE = 120; // 10 feet = 120 inches
+        const STORAGE_KEY = 'lockergrid_3d_inventory_v1';
+        const LOGS_KEY = 'lockergrid_3d_logs_v1';
+
+        // Application State
+        let boxes = [];
+        let activityLogs = [];
+        let selectedBoxId = null;
+        let currentCategoryFilter = 'ALL';
+        let dimensionUnit = 'in'; // 'in' or 'ft'
+        let showZoneGuides = true;
+
+        // Three.js Core Objects
+        let scene, camera, renderer, controls;
+        let lockerGroup, boxesGroup, zonesGroup;
+        let boxMeshes = new Map(); // id -> THREE.Group
+        let raycaster, mouse;
+        let hoveredBoxId = null;
+
+        // Default Realistic Technician Inventory Sample
+        const DEFAULT_BOXES = [
+            {
+                id: 'box-101',
+                name: 'HVAC Control Boards & Thermostats',
+                sku: 'HVC-8840',
+                category: 'Parts',
+                qty: 14,
+                w: 30, d: 24, h: 20,
+                x: 4, y: 0, z: 4,
+                color: '#38bdf8',
+                notes: 'Carrier & Trane OEM boards. Keep dry.'
+            },
+            {
+                id: 'box-102',
+                name: 'Power Supplies, Relays & Transformers',
+                sku: 'PWR-240V',
+                category: 'Parts',
+                qty: 22,
+                w: 30, d: 24, h: 18,
+                x: 4, y: 20, z: 4, // Stacked neatly on box-101
+                color: '#0284c7',
+                notes: '24VAC step-down transformers & contactors.'
+            },
+            {
+                id: 'box-103',
+                name: 'Cat6 Plenum Spools & RJ45 Kits',
+                sku: 'NET-C6P',
+                category: 'Consumables',
+                qty: 4,
+                w: 36, d: 24, h: 24,
+                x: 40, y: 0, z: 4,
+                color: '#10b981',
+                notes: 'Blue 1000ft pull boxes + shielded jacks.'
+            },
+            {
+                id: 'box-104',
+                name: '3rd-Party Dispatch Kit (WO #4912)',
+                sku: '3P-DISP-04',
+                category: 'Third-Party Pickup',
+                qty: 3,
+                w: 28, d: 22, h: 18,
+                x: 84, y: 0, z: 88, // Placed right near the Front Roll-Up Door in 3rd-Party Zone
+                color: '#f59e0b',
+                notes: 'Staged for Apex Subcontractor pickup Tuesday AM.'
+            },
+            {
+                id: 'box-105',
+                name: 'Fluke Meters & Manifold Gauge Case',
+                sku: 'TL-FLK-90',
+                category: 'Tools',
+                qty: 2,
+                w: 26, d: 20, h: 16,
+                x: 88, y: 0, z: 8,
+                color: '#a855f7',
+                notes: 'Calibrated digital manometer & clamp meter.'
+            },
+            {
+                id: 'box-106',
+                name: 'RMA Defective Actuators (Return)',
+                sku: 'RMA-2026-11',
+                category: 'Returns/RMA',
+                qty: 5,
+                w: 24, d: 20, h: 16,
+                x: 40, y: 24, z: 4, // Stacked on Cat6 Spools
+                color: '#f43f5e',
+                notes: 'Pre-paid UPS label inside pouch.'
+            }
+        ];
+
+        const DEFAULT_LOGS = [
+            {
+                id: 'log-1',
+                timestamp: '2026-11-23 08:45 AM',
+                tech: 'Self (Lead Tech)',
+                action: 'Staged Box',
+                boxName: '3rd-Party Dispatch Kit (WO #4912)',
+                qty: 3,
+                note: 'Placed in front-right pickup zone for contractor.'
+            },
+            {
+                id: 'log-2',
+                timestamp: '2026-11-21 04:15 PM',
+                tech: '3rd-Party Tech',
+                action: 'Pulled Parts',
+                boxName: 'HVAC Control Boards & Thermostats',
+                qty: 2,
+                note: 'Emergency call at Vernon Medical Plaza.'
+            }
+        ];
+
+        // ============================================================================
+        // INITIALIZATION & PERSISTENCE
+        // ============================================================================
+        function initApp() {
+            lucide.createIcons();
+            loadFromStorage();
+            initThreeJS();
+            syncBoxesTo3D();
+            renderInventoryList();
+            renderActivityLogs();
+            updateStats();
+            setCameraView('iso');
+        }
+
+        function loadFromStorage() {
+            try {
+                const savedBoxes = localStorage.getItem(STORAGE_KEY);
+                const savedLogs = localStorage.getItem(LOGS_KEY);
+                if (savedBoxes) {
+                    boxes = JSON.parse(savedBoxes);
+                } else {
+                    boxes = JSON.parse(JSON.stringify(DEFAULT_BOXES));
+                    saveToStorage();
+                }
+                if (savedLogs) {
+                    activityLogs = JSON.parse(savedLogs);
+                } else {
+                    activityLogs = JSON.parse(JSON.stringify(DEFAULT_LOGS));
+                    saveToStorage();
+                }
+            } catch (err) {
+                console.error('Failed to load storage:', err);
+                boxes = JSON.parse(JSON.stringify(DEFAULT_BOXES));
+                activityLogs = JSON.parse(JSON.stringify(DEFAULT_LOGS));
+            }
+        }
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(boxes));
+                localStorage.setItem(LOGS_KEY, JSON.stringify(activityLogs));
+            } catch (err) {
+                console.error('Failed to save to localStorage:', err);
+            }
+        }
+
+        // ============================================================================
+        // THREE.JS 3D LOCKER SCENE SETUP
+        // ============================================================================
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090d16);
+            scene.fog = new THREE.FogExp2(0x090d16, 0.0014);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, width / height, 1, 1500);
+            camera.position.set(175, 165, 195);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 52, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.07;
+            controls.maxDistance = 420;
+            controls.minDistance = 30;
+            controls.maxPolarAngle = Math.PI * 0.495; // Prevent going under floor
+            controls.update();
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.65);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight.position.set(110, 210, 140);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 10;
+            dirLight.shadow.camera.far = 500;
+            const d = 100;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            // Interior Overhead Locker Bulb
+            const lockerLight = new THREE.PointLight(0x38bdf8, 0.5, 220);
+            lockerLight.position.set(0, 112, 0);
+            scene.add(lockerLight);
+
+            // Groups
+            lockerGroup = new THREE.Group();
+            zonesGroup = new THREE.Group();
+            boxesGroup = new THREE.Group();
+            scene.add(lockerGroup);
+            scene.add(zonesGroup);
+            scene.add(boxesGroup);
+
+            buildLockerEnclosure();
+            buildFloorZones();
+
+            // Raycaster for Mouse Hover & Click
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            const domElem = renderer.domElement;
+            domElem.addEventListener('pointermove', onPointerMove);
+            domElem.addEventListener('pointerdown', onPointerDown);
+            domElem.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('resize', onWindowResize);
+
+            // Start Animation Loop
+            animate();
+        }
+
+        function buildLockerEnclosure() {
+            // 1. Concrete Floor Slab (120" x 120")
+            const floorGeo = new THREE.BoxGeometry(LOCKER_SIZE + 4, 2, LOCKER_SIZE + 4);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x1e293b,
+                roughness: 0.85,
+                metalness: 0.1
+            });
+            const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            floorMesh.position.set(0, -1, 0);
+            floorMesh.receiveShadow = true;
+            lockerGroup.add(floorMesh);
+
+            // 2. Floor 1-Foot Grid (10 divisions across 120" = 12" per square)
+            const floorGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x38bdf8, 0x334155);
+            floorGrid.position.set(0, 0.1, 0);
+            lockerGroup.add(floorGrid);
+
+            // 3. Back Wall (-Z = -60) & Left Wall (-X = -60) Translucent Corrugated Metal Panels + 1ft Grids
+            const wallMat = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                transparent: true,
+                opacity: 0.55,
+                side: THREE.DoubleSide,
+                roughness: 0.7
+            });
+
+            // Back Wall
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(LOCKER_SIZE, LOCKER_SIZE), wallMat);
+            backWall.position.set(0, LOCKER_SIZE / 2, -LOCKER_SIZE / 2);
+            lockerGroup.add(backWall);
+
+            const backGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x1e293b, 0x1e293b);
+            backGrid.rotation.x = Math.PI / 2;
+            backGrid.position.set(0, LOCKER_SIZE / 2, -LOCKER_SIZE / 2 + 0.1);
+            lockerGroup.add(backGrid);
+
+            // Left Wall
+            const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(LOCKER_SIZE, LOCKER_SIZE), wallMat);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-LOCKER_SIZE / 2, LOCKER_SIZE / 2, 0);
+            lockerGroup.add(leftWall);
+
+            const leftGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x1e293b, 0x1e293b);
+            leftGrid.rotation.z = Math.PI / 2;
+            leftGrid.position.set(-LOCKER_SIZE / 2 + 0.1, LOCKER_SIZE / 2, 0);
+            lockerGroup.add(leftGrid);
+
+            // 4. Outer 10'x10'x10' Steel Frame Wireframe
+            const frameGeo = new THREE.BoxGeometry(LOCKER_SIZE, LOCKER_SIZE, LOCKER_SIZE);
+            const edgesGeo = new THREE.EdgesGeometry(frameGeo);
+            const frameMat = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 });
+            const frameWire = new THREE.LineSegments(edgesGeo, frameMat);
+            frameWire.position.set(0, LOCKER_SIZE / 2, 0);
+            lockerGroup.add(frameWire);
+
+            // 5. Front Roll-Up Door Indicator (+Z = +60)
+            // Green threshold bar + overhead rolled door drum + subtle sign texture
+            const thresholdGeo = new THREE.BoxGeometry(LOCKER_SIZE, 0.8, 2.5);
+            const thresholdMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+            const threshold = new THREE.Mesh(thresholdGeo, thresholdMat);
+            threshold.position.set(0, 0.4, LOCKER_SIZE / 2);
+            lockerGroup.add(threshold);
+
+            // Overhead Roll-Up Door Drum
+            const drumGeo = new THREE.CylinderGeometry(4, 4, LOCKER_SIZE - 4, 16);
+            drumGeo.rotateZ(Math.PI / 2);
+            const drumMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.4 });
+            const drum = new THREE.Mesh(drumGeo, drumMat);
+            drum.position.set(0, LOCKER_SIZE - 4, LOCKER_SIZE / 2 - 2);
+            lockerGroup.add(drum);
+
+            // Canvas label on floor outside door: "FRONT ROLL-UP DOOR (10 FT)"
+            const doorLabel = createTextSprite('FRONT DOOR (10\' WIDE)', '#10b981', 'rgba(15, 23, 42, 0.85)');
+            doorLabel.position.set(0, 2, LOCKER_SIZE / 2 + 12);
+            doorLabel.scale.set(42, 10.5, 1);
+            lockerGroup.add(doorLabel);
+
+            // Foot Scale Markers along Left-Front Vertical Post (1' to 10')
+            for (let ft = 2; ft <= 10; ft += 2) {
+                const tickLabel = createTextSprite(`${ft}'`, '#94a3b8', 'rgba(15, 23, 42, 0.6)');
+                tickLabel.position.set(-LOCKER_SIZE / 2 - 6, ft * 12, LOCKER_SIZE / 2);
+                tickLabel.scale.set(14, 5, 1);
+                lockerGroup.add(tickLabel);
+            }
+        }
+
+        function buildFloorZones() {
+            // 3rd-Party Pickup Staging Zone (Front-Right Corner: X: 72..120, Z: 72..120 -> 4'x4' area)
+            const zoneW = 48;
+            const zoneD = 48;
+            const zoneGeo = new THREE.PlaneGeometry(zoneW, zoneD);
+            const zoneMat = new THREE.MeshBasicMaterial({
+                color: 0xf59e0b,
+                transparent: true,
+                opacity: 0.16,
+                side: THREE.DoubleSide
+            });
+            const zoneMesh = new THREE.Mesh(zoneGeo, zoneMat);
+            zoneMesh.rotation.x = -Math.PI / 2;
+            // Logical X: 72..120 -> center 96 -> worldX = 96 - 60 = 36
+            // Logical Z: 72..120 -> center 96 -> worldZ = 96 - 60 = 36
+            zoneMesh.position.set(36, 0.25, 36);
+            zonesGroup.add(zoneMesh);
+
+            // Dashed/Solid Amber Border around 3rd-Party Zone
+            const borderEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(zoneW, 0.2, zoneD));
+            const borderLine = new THREE.LineSegments(borderEdges, new THREE.LineBasicMaterial({ color: 0xf59e0b }));
+            borderLine.position.set(36, 0.3, 36);
+            zonesGroup.add(borderLine);
+
+            // Zone Label Sprite
+            const zoneSprite = createTextSprite('3RD-PARTY PICKUP ZONE', '#fbbf24', 'rgba(15, 23, 42, 0.85)');
+            zoneSprite.position.set(36, 1.5, 36);
+            zoneSprite.scale.set(36, 9, 1);
+            zonesGroup.add(zoneSprite);
+
+            // Center Walkway Guide (X: 48..72, Z: 24..120)
+            const aisleGeo = new THREE.PlaneGeometry(24, 96);
+            const aisleMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.06,
+                side: THREE.DoubleSide
+            });
+            const aisleMesh = new THREE.Mesh(aisleGeo, aisleMat);
+            aisleMesh.rotation.x = -Math.PI / 2;
+            aisleMesh.position.set(0, 0.2, 12);
+            zonesGroup.add(aisleMesh);
+        }
+
+        function toggleZoneGuides() {
+            showZoneGuides = !showZoneGuides;
+            zonesGroup.visible = showZoneGuides;
+            const statusEl = document.getElementById('zones-status');
+            statusEl.textContent = showZoneGuides ? 'ON' : 'OFF';
+            statusEl.className = showZoneGuides ? 'text-emerald-400' : 'text-slate-500';
+        }
+
+        // Helper to generate crisp high-DPI text labels in 3D
+        function createTextSprite(text, textColor = '#ffffff', bgColor = 'rgba(15,23,42,0.8)') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            // Background pill
+            ctx.fillStyle = bgColor;
+            ctx.beginPath();
+            ctx.roundRect(12, 16, 488, 96, 24);
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 34px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 66);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+            return new THREE.Sprite(material);
+        }
+
+        // ============================================================================
+        // RENDERING & SYNCHRONIZING 3D BOXES
+        // ============================================================================
+        function syncBoxesTo3D() {
+            // Remove meshes that no longer exist
+            const validIds = new Set(boxes.map(b => b.id));
+            for (const [id, group] of boxMeshes.entries()) {
+                if (!validIds.has(id)) {
+                    boxesGroup.remove(group);
+                    boxMeshes.delete(id);
+                }
+            }
+
+            // Create or Update each box
+            boxes.forEach(box => {
+                let group = boxMeshes.get(box.id);
+                const isSelected = box.id === selectedBoxId;
+
+                if (!group) {
+                    group = new THREE.Group();
+                    group.userData = { boxId: box.id };
+                    boxesGroup.add(group);
+                    boxMeshes.set(box.id, group);
+                } else {
+                    // Clear existing children to rebuild cleanly on dimension/color changes
+                    while (group.children.length > 0) {
+                        group.remove(group.children[0]);
+                    }
+                }
+
+                // Main Box Geometry
+                const geo = new THREE.BoxGeometry(box.w, box.h, box.d);
+                const baseColor = new THREE.Color(box.color || '#38bdf8');
+
+                const mat = new THREE.MeshStandardMaterial({
+                    color: baseColor,
+                    roughness: 0.45,
+                    metalness: 0.15,
+                    emissive: isSelected ? baseColor : new THREE.Color(0x000000),
+                    emissiveIntensity: isSelected ? 0.35 : 0
+                });
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData = { boxId: box.id };
+                group.add(mesh);
+
+                // Crisp Edges Outline (Highlighted white/cyan when selected)
+                const edges = new THREE.EdgesGeometry(geo);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: isSelected ? 0xffffff : 0x090d16,
+                    linewidth: isSelected ? 2 : 1
+                });
+                const wireframe = new THREE.LineSegments(edges, lineMat);
+                group.add(wireframe);
+
+                // Selection Bounding Halo
+                if (isSelected) {
+                    const haloGeo = new THREE.BoxGeometry(box.w + 1.5, box.h + 1.5, box.d + 1.5);
+                    const haloEdges = new THREE.EdgesGeometry(haloGeo);
+                    const haloLine = new THREE.LineSegments(haloEdges, new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+                    group.add(haloLine);
+                }
+
+                // Top Label Plate on Box (Shows SKU / Short Name)
+                const shortLabel = box.sku ? `${box.sku} (${box.qty})` : box.name.slice(0, 14);
+                const labelSprite = createTextSprite(shortLabel, '#ffffff', 'rgba(9, 13, 22, 0.82)');
+                labelSprite.position.set(0, box.h / 2 + 2.5, 0);
+                const spriteScale = Math.max(14, Math.min(box.w * 0.9, 28));
+                labelSprite.scale.set(spriteScale, spriteScale * 0.25, 1);
+                group.add(labelSprite);
+
+                // Convert Logical Coordinates (0..120 from Back-Left-Floor) to Three.js World Coordinates
+                const worldX = box.x + (box.w / 2) - (LOCKER_SIZE / 2);
+                const worldY = box.y + (box.h / 2);
+                const worldZ = box.z + (box.d / 2) - (LOCKER_SIZE / 2);
+                group.position.set(worldX, worldY, worldZ);
+            });
+        }
+
+        // ============================================================================
+        // SPATIAL COLLISION DETECTION & SMART AUTO-PLACEMENT / STACKING
+        // ============================================================================
+        function checkAABBOverlap(a, b) {
+            const eps = 0.05; // Tolerance so touching faces don't count as overlapping
+            return (
+                a.x < b.x + b.w - eps &&
+                a.x + a.w > b.x + eps &&
+                a.y < b.y + b.h - eps &&
+                a.y + a.h > b.y + eps &&
+                a.z < b.z + b.d - eps &&
+                a.z + a.d > b.z + eps
+            );
+        }
+
+        function isValidPlacement(candidate, ignoreBoxId = null) {
+            // Check locker 10'x10'x10' (120") boundaries
+            if (
+                candidate.x < 0 ||
+                candidate.y < 0 ||
+                candidate.z < 0 ||
+                candidate.x + candidate.w > LOCKER_SIZE ||
+                candidate.y + candidate.h > LOCKER_SIZE ||
+                candidate.z + candidate.d > LOCKER_SIZE
+            ) {
+                return false;
+            }
+
+            // Check overlap with existing boxes
+            for (const other of boxes) {
+                if (other.id === ignoreBoxId) continue;
+                if (checkAABBOverlap(candidate, other)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * Smart Auto-Place / Stack Algorithm:
+         * 1. If category is 'Third-Party Pickup', scans near the front door (Z high, X high) first.
+         * 2. Otherwise scans floor positions (Y = 0) in 4" grid increments from back-left to front.
+         * 3. If floor is full, attempts to stack cleanly on top of existing boxes (Y = other.y + other.h).
+         */
+        function findSmartPosition(w, d, h, category = 'Parts', ignoreBoxId = null) {
+            const step = 4;
+
+            // Priority 1: Third-Party Pickup Zone (Front-Right: X: 72..120, Z: 72..120)
+            if (category === 'Third-Party Pickup') {
+                for (let z = LOCKER_SIZE - d - 4; z >= 68; z -= step) {
+                    for (let x = LOCKER_SIZE - w - 4; x >= 68; x -= step) {
+                        const cand = { x, y: 0, z, w, d, h };
+                        if (isValidPlacement(cand, ignoreBoxId)) return { x, y: 0, z };
+                    }
+                }
+            }
+
+            // Priority 2: Open Floor Space (Y = 0), keeping a central aisle accessible if possible
+            for (let z = 4; z <= LOCKER_SIZE - d - 2; z += step) {
+                for (let x = 4; x <= LOCKER_SIZE - w - 2; x += step) {
+                    const cand = { x, y: 0, z, w, d, h };
+                    if (isValidPlacement(cand, ignoreBoxId)) {
+                        return { x, y: 0, z };
+                    }
+                }
+            }
+
+            // Priority 3: Stack neatly on top of existing boxes
+            const sortedBases = [...boxes]
+                .filter(b => b.id !== ignoreBoxId)
+                .sort((a, b) => (a.y + a.h) - (b.y + b.h));
+
+            for (const base of sortedBases) {
+                const stackY = base.y + base.h;
+                if (stackY + h <= LOCKER_SIZE) {
+                    // Align to base's top-left corner
+                    const cand = { x: base.x, y: stackY, z: base.z, w, d, h };
+                    if (isValidPlacement(cand, ignoreBoxId)) {
+                        return { x: base.x, y: stackY, z: base.z };
+                    }
+                }
+            }
+
+            // Fallback: Origin (0,0,0) clamped
+            return {
+                x: 0,
+                y: 0,
+                z: 0
+            };
+        }
+
+        // ============================================================================
+        // RAYCASTING, HOVER TOOLTIP & BOX SELECTION
+        // ============================================================================
+        let pointerDownPos = { x: 0, y: 0 };
+
+        function onPointerDown(event) {
+            pointerDownPos = { x: event.clientX, y: event.clientY };
+        }
+
+        function onPointerUp(event) {
+            // Distinguish between camera drag and direct click
+            const dist = Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y);
+            if (dist > 5) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const meshes = [];
+            boxesGroup.children.forEach(group => {
+                if (group.children[0]) meshes.push(group.children[0]);
+            });
+
+            const intersects = raycaster.intersectObjects(meshes, false);
+            if (intersects.length > 0) {
+                const clickedId = intersects[0].object.userData.boxId;
+                selectBox(clickedId);
+            }
+        }
+
+        function onPointerMove(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const meshes = [];
+            boxesGroup.children.forEach(group => {
+                if (group.children[0]) meshes.push(group.children[0]);
+            });
+
+            const intersects = raycaster.intersectObjects(meshes, false);
+            const tooltip = document.getElementById('hover-tooltip');
+
+            if (intersects.length > 0) {
+                const hitId = intersects[0].object.userData.boxId;
+                const box = boxes.find(b => b.id === hitId);
+                if (box) {
+                    renderer.domElement.style.cursor = 'pointer';
+                    hoveredBoxId = hitId;
+
+                    // Populate & Position Floating Tooltip
+                    document.getElementById('tt-category').textContent = box.category;
+                    document.getElementById('tt-sku').textContent = box.sku || 'NO-SKU';
+                    document.getElementById('tt-name').textContent = box.name;
+                    document.getElementById('tt-qty').textContent = box.qty;
+                    document.getElementById('tt-dim').textContent = `${box.w}×${box.d}×${box.h}"`;
+                    document.getElementById('tt-pos').textContent = `X:${box.x}" Y:${box.y}" Z:${box.z}"`;
+
+                    tooltip.style.left = `${Math.min(window.innerWidth - 255, event.clientX + 14)}px`;
+                    tooltip.style.top = `${Math.min(window.innerHeight - 130, event.clientY + 14)}px`;
+                    tooltip.classList.remove('hidden');
+                    return;
+                }
+            }
+
+            renderer.domElement.style.cursor = 'grab';
+            hoveredBoxId = null;
+            tooltip.classList.add('hidden');
+        }
+
+        // ============================================================================
+        // CAMERA PRESETS & FOCUS
+        // ============================================================================
+        function setCameraView(view) {
+            // Update active button styling
+            document.querySelectorAll('.cam-btn').forEach(btn => {
+                if (btn.dataset.view === view) {
+                    btn.className = 'cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition';
+                } else {
+                    btn.className = 'cam-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
+                }
+            });
+
+            switch (view) {
+                case 'iso':
+                    camera.position.set(170, 160, 190);
+                    controls.target.set(0, 50, 0);
+                    break;
+                case 'front':
+                    camera.position.set(0, 65, 225);
+                    controls.target.set(0, 55, 0);
+                    break;
+                case 'top':
+                    camera.position.set(0, 240, 15);
+                    controls.target.set(0, 0, 0);
+                    break;
+                case 'interior':
+                    camera.position.set(0, 62, 56);
+                    controls.target.set(0, 48, -20);
+                    break;
+            }
+            controls.update();
+        }
+
+        function focusCameraOnBox(box) {
+            const worldX = box.x + (box.w / 2) - (LOCKER_SIZE / 2);
+            const worldY = box.y + (box.h / 2);
+            const worldZ = box.z + (box.d / 2) - (LOCKER_SIZE / 2);
+
+            controls.target.set(worldX, worldY, worldZ);
+            camera.position.set(worldX + 85, Math.min(180, worldY + 75), worldZ + 95);
+            controls.update();
+        }
+
+        // ============================================================================
+        // BOX SELECTION, EDITING & INSPECTOR CONTROLS
+        // ============================================================================
+        function selectBox(id, shouldFocusCamera = false) {
+            selectedBoxId = id;
+            const box = boxes.find(b => b.id === id);
+            if (!box) return;
+
+            // Switch to inventory tab so inspector is visible
+            switchTab('inventory');
+
+            const inspector = document.getElementById('box-inspector');
+            inspector.classList.remove('hidden');
+
+            document.getElementById('insp-badge').textContent = box.category;
+            document.getElementById('insp-sku').textContent = box.sku || 'NO-SKU';
+            document.getElementById('insp-name').textContent = box.name;
+            document.getElementById('insp-qty').value = box.qty;
+            document.getElementById('insp-dims-label').textContent = `${box.w}"W × ${box.d}"D × ${box.h}"H`;
+            document.getElementById('insp-notes').textContent = box.notes || 'No notes recorded.';
+
+            // Update Sliders & Max bounds so box never leaves 120" locker
+            const xSlider = document.getElementById('insp-x');
+            const zSlider = document.getElementById('insp-z');
+            const ySlider = document.getElementById('insp-y');
+
+            xSlider.max = Math.max(0, LOCKER_SIZE - box.w);
+            zSlider.max = Math.max(0, LOCKER_SIZE - box.d);
+            ySlider.max = Math.max(0, LOCKER_SIZE - box.h);
+
+            xSlider.value = box.x;
+            zSlider.value = box.z;
+            ySlider.value = box.y;
+
+            document.getElementById('insp-x-val').textContent = `${box.x}"`;
+            document.getElementById('insp-z-val').textContent = `${box.z}"`;
+            document.getElementById('insp-y-val').textContent = `${box.y}"`;
+
+            if (shouldFocusCamera) {
+                focusCameraOnBox(box);
+            }
+
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function deselectBox() {
+            selectedBoxId = null;
+            document.getElementById('box-inspector').classList.add('hidden');
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function moveSelectedBox(axis, val) {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+
+            const numVal = parseInt(val, 10);
+            const maxVal = axis === 'x' ? LOCKER_SIZE - box.w : axis === 'z' ? LOCKER_SIZE - box.d : LOCKER_SIZE - box.h;
+            const clamped = Math.max(0, Math.min(maxVal, numVal));
+
+            box[axis] = clamped;
+            document.getElementById(`insp-${axis}-val`).textContent = `${clamped}"`;
+
+            saveToStorage();
+            syncBoxesTo3D();
+        }
+
+        function rotateSelectedBox() {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+
+            // Swap Width (X) and Depth (Z)
+            const newW = box.d;
+            const newD = box.w;
+
+            // Clamp position inside 120" locker after rotation
+            box.w = newW;
+            box.d = newD;
+            box.x = Math.min(box.x, LOCKER_SIZE - box.w);
+            box.z = Math.min(box.z, LOCKER_SIZE - box.d);
+
+            saveToStorage();
+            selectBox(box.id, false);
+            showToast(`Rotated "${box.name}" 90°`, 'info');
+        }
+
+        function autoStackSelectedBox() {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+
+            const pos = findSmartPosition(box.w, box.d, box.h, box.category, box.id);
+            box.x = pos.x;
+            box.y = pos.y;
+            box.z = pos.z;
+
+            saveToStorage();
+            selectBox(box.id, true);
+            showToast(`Auto-placed at X:${pos.x}" Y:${pos.y}" Z:${pos.z}"`, 'success');
+        }
+
+        function adjustSelectedQty(delta) {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+            box.qty = Math.max(0, box.qty + delta);
+            document.getElementById('insp-qty').value = box.qty;
+            saveToStorage();
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function updateSelectedQtyDirect(val) {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+            box.qty = Math.max(0, parseInt(val, 10) || 0);
+            saveToStorage();
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function deleteSelectedBox() {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+
+            addActivityLog('Self (Lead Tech)', 'Removed Box', box.name, box.qty, 'Removed from 3D locker layout.');
+            boxes = boxes.filter(b => b.id !== selectedBoxId);
+            deselectBox();
+            saveToStorage();
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            showToast(`Removed "${box.name}" from locker`, 'info');
+        }
+
+        // ============================================================================
+        // ADDING A NEW BOX FORM LOGIC
+        // ============================================================================
+        function setDimensionUnit(unit) {
+            dimensionUnit = unit;
+            const inBtn = document.getElementById('unit-in-btn');
+            const ftBtn = document.getElementById('unit-ft-btn');
+            const label = document.getElementById('dim-unit-label');
+
+            const wInput = document.getElementById('new-w');
+            const dInput = document.getElementById('new-d');
+            const hInput = document.getElementById('new-h');
+
+            if (unit === 'ft') {
+                inBtn.className = 'px-2 py-1 rounded-md text-slate-400 hover:text-white';
+                ftBtn.className = 'px-2 py-1 rounded-md bg-sky-500/20 text-sky-300 font-semibold';
+                label.textContent = 'feet';
+                wInput.max = 10; dInput.max = 10; hInput.max = 10;
+                wInput.value = +(parseFloat(wInput.value) / 12).toFixed(2);
+                dInput.value = +(parseFloat(dInput.value) / 12).toFixed(2);
+                hInput.value = +(parseFloat(hInput.value) / 12).toFixed(2);
+            } else {
+                ftBtn.className = 'px-2 py-1 rounded-md text-slate-400 hover:text-white';
+                inBtn.className = 'px-2 py-1 rounded-md bg-sky-500/20 text-sky-300 font-semibold';
+                label.textContent = 'inches';
+                wInput.max = 120; dInput.max = 120; hInput.max = 120;
+                wInput.value = Math.round(parseFloat(wInput.value) * 12);
+                dInput.value = Math.round(parseFloat(dInput.value) * 12);
+                hInput.value = Math.round(parseFloat(hInput.value) * 12);
+            }
+        }
+
+        function toggleManualCoords(isAuto) {
+            const fields = document.getElementById('manual-coords-fields');
+            const hint = document.getElementById('auto-place-hint');
+            if (isAuto) {
+                fields.classList.add('hidden');
+                hint.classList.remove('hidden');
+            } else {
+                fields.classList.remove('hidden');
+                hint.classList.add('hidden');
+            }
+        }
+
+        function selectColor(hex) {
+            document.getElementById('new-color').value = hex;
+            document.querySelectorAll('.color-swatch').forEach(btn => {
+                if (btn.dataset.color === hex) {
+                    btn.classList.add('ring-2', 'ring-white', 'opacity-100');
+                    btn.classList.remove('opacity-70');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-white', 'opacity-100');
+                    btn.classList.add('opacity-70');
+                }
+            });
+        }
+
+        function autoColorForCategory(cat) {
+            const map = {
+                'Parts': '#38bdf8',
+                'Third-Party Pickup': '#f59e0b',
+                'Tools': '#a855f7',
+                'Consumables': '#10b981',
+                'Returns/RMA': '#f43f5e'
+            };
+            if (map[cat]) selectColor(map[cat]);
+        }
+
+        function handleAddBox(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('new-name').value.trim();
+            const sku = document.getElementById('new-sku').value.trim() || `BOX-${Math.floor(100 + Math.random() * 900)}`;
+            const qty = parseInt(document.getElementById('new-qty').value, 10) || 1;
+            const category = document.getElementById('new-category').value;
+            const color = document.getElementById('new-color').value;
+            const notes = document.getElementById('new-notes').value.trim();
+
+            let rawW = parseFloat(document.getElementById('new-w').value);
+            let rawD = parseFloat(document.getElementById('new-d').value);
+            let rawH = parseFloat(document.getElementById('new-h').value);
+
+            // Convert feet to inches if needed
+            if (dimensionUnit === 'ft') {
+                rawW *= 12;
+                rawD *= 12;
+                rawH *= 12;
+            }
+
+            const w = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawW)));
+            const d = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawD)));
+            const h = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawH)));
+
+            const isAuto = document.getElementById('auto-place-check').checked;
+            let pos = { x: 0, y: 0, z: 0 };
+
+            if (isAuto) {
+                pos = findSmartPosition(w, d, h, category);
+            } else {
+                pos.x = Math.max(0, Math.min(LOCKER_SIZE - w, parseInt(document.getElementById('new-x').value, 10) || 0));
+                pos.z = Math.max(0, Math.min(LOCKER_SIZE - d, parseInt(document.getElementById('new-z').value, 10) || 0));
+                pos.y = Math.max(0, Math.min(LOCKER_SIZE - h, parseInt(document.getElementById('new-y').value, 10) || 0));
+            }
+
+            const newBox = {
+                id: 'box-' + Date.now(),
+                name,
+                sku,
+                category,
+                qty,
+                w, d, h,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                color,
+                notes
+            };
+
+            boxes.push(newBox);
+            addActivityLog('Self (Lead Tech)', 'Added Box', name, qty, `Placed at X:${pos.x}" Y:${pos.y}" Z:${pos.z}" (${w}×${d}×${h}")`);
+
+            saveToStorage();
+            syncBoxesTo3D();
+            updateStats();
+            selectBox(newBox.id, true);
+
+            // Reset form name/sku/notes for quick subsequent additions
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-sku').value = '';
+            document.getElementById('new-notes').value = '';
+
+            showToast(`Added "${name}" to 3D locker`, 'success');
+        }
+
+        // ============================================================================
+        // TECHNICIAN & 3RD-PARTY ACCESS LOGGING
+        // ============================================================================
+        function submitBoxActivityLog() {
+            const box = boxes.find(b => b.id === selectedBoxId);
+            if (!box) return;
+
+            const tech = document.getElementById('log-tech-select').value;
+            const action = document.getElementById('log-action-select').value;
+            const qty = Math.max(1, parseInt(document.getElementById('log-qty-input').value, 10) || 1);
+            const note = document.getElementById('log-note-input').value.trim();
+
+            if (action === 'Pulled Parts') {
+                box.qty = Math.max(0, box.qty - qty);
+            } else if (action === 'Restocked') {
+                box.qty += qty;
+            } else if (action === 'Checked Out Whole Box') {
+                addActivityLog(tech, action, box.name, box.qty, note || 'Checked out entire box for service call.');
+                boxes = boxes.filter(b => b.id !== box.id);
+                deselectBox();
+                saveToStorage();
+                syncBoxesTo3D();
+                renderInventoryList();
+                updateStats();
+                showToast(`${tech} checked out "${box.name}"`, 'warning');
+                return;
+            }
+
+            addActivityLog(tech, action, box.name, qty, note);
+            document.getElementById('log-note-input').value = '';
+
+            saveToStorage();
+            selectBox(box.id, false);
+            updateStats();
+            showToast(`Logged: ${tech} — ${action} (${qty})`, 'success');
+        }
+
+        function addActivityLog(tech, action, boxName, qty, note) {
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+                              now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            activityLogs.unshift({
+                id: 'log-' + Date.now(),
+                timestamp,
+                tech,
+                action,
+                boxName,
+                qty,
+                note
+            });
+
+            if (activityLogs.length > 50) activityLogs.pop();
+            renderActivityLogs();
+        }
+
+        function clearLogs() {
+            activityLogs = [];
+            saveToStorage();
+            renderActivityLogs();
+        }
+
+        function renderActivityLogs() {
+            const container = document.getElementById('activity-log-list');
+            if (activityLogs.length === 0) {
+                container.innerHTML = `<div class="text-center text-xs text-slate-500 py-8">No technician activity logged yet.</div>`;
+                return;
+            }
+
+            container.innerHTML = activityLogs.map(log => {
+                const is3P = log.tech.includes('3rd-Party');
+                const badgeClass = is3P
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    : 'bg-sky-500/20 text-sky-300 border-sky-500/30';
+
+                return `
+                    <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">${escapeHTML(log.tech)}</span>
+                            <span class="font-mono text-[10px] text-slate-500">${escapeHTML(log.timestamp)}</span>
+                        </div>
+                        <div class="font-semibold text-slate-200">
+                            ${escapeHTML(log.action)}: <span class="text-white">${escapeHTML(log.boxName)}</span>
+                            <span class="font-mono text-sky-400">(Qty: ${log.qty})</span>
+                        </div>
+                        ${log.note ? `<p class="text-[11px] text-slate-400 italic">"${escapeHTML(log.note)}"</p>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ============================================================================
+        // UI LIST RENDERING, STATS & NAVIGATION
+        // ============================================================================
+        function setCategoryFilter(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-filter-btn').forEach(btn => {
+                if (btn.dataset.cat === cat) {
+                    btn.className = 'cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 whitespace-nowrap';
+                } else {
+                    btn.className = 'cat-filter-btn px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap';
+                }
+            });
+            renderInventoryList();
+        }
+
+        function renderInventoryList() {
+            const listEl = document.getElementById('inventory-list');
+            const query = document.getElementById('search-input').value.toLowerCase().trim();
+
+            const filtered = boxes.filter(b => {
+                const matchesCat = currentCategoryFilter === 'ALL' || b.category === currentCategoryFilter;
+                const matchesQuery = !query ||
+                    b.name.toLowerCase().includes(query) ||
+                    (b.sku && b.sku.toLowerCase().includes(query)) ||
+                    (b.notes && b.notes.toLowerCase().includes(query));
+                return matchesCat && matchesQuery;
+            });
+
+            document.getElementById('tab-inv-count').textContent = boxes.length;
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="text-center py-8 px-4 border border-dashed border-slate-800 rounded-xl">
+                        <p class="text-xs text-slate-400">No inventory boxes match your filter.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(box => {
+                const isSelected = box.id === selectedBoxId;
+                const borderClass = isSelected
+                    ? 'border-sky-500 bg-slate-800/80'
+                    : 'border-slate-800 bg-slate-950/70 hover:border-slate-700 hover:bg-slate-900';
+
+                return `
+                    <div onclick="selectBox('${box.id}', true)" class="cursor-pointer border ${borderClass} rounded-xl p-2.5 transition flex items-center justify-between gap-2.5">
+                        <div class="flex items-start gap-2.5 min-w-0">
+                            <span class="w-3.5 h-3.5 rounded-sm mt-0.5 shrink-0 shadow" style="background-color: ${box.color}"></span>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-semibold text-xs text-white truncate">${escapeHTML(box.name)}</span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-0.5 text-[11px] font-mono text-slate-400">
+                                    <span>${escapeHTML(box.sku || 'NO-SKU')}</span>
+                                    <span>•</span>
+                                    <span>${box.w}×${box.d}×${box.h}"</span>
+                                    <span>•</span>
+                                    <span class="text-slate-500">Y:${box.y}"</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end shrink-0">
+                            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700">
+                                Qty: ${box.qty}
+                            </span>
+                            <span class="text-[10px] text-slate-500 mt-1">${escapeHTML(box.category)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateStats() {
+            const totalBoxes = boxes.length;
+            let totalCubicInches = 0;
+            let thirdPartyBoxes = 0;
+
+            boxes.forEach(b => {
+                totalCubicInches += (b.w * b.d * b.h);
+                if (b.category === 'Third-Party Pickup') thirdPartyBoxes++;
+            });
+
+            // 1 cubic foot = 1,728 cubic inches. 10x10x10 locker = 1,000 cu ft.
+            const cubicFeet = totalCubicInches / 1728;
+            const percentUsed = ((cubicFeet / 1000) * 100).toFixed(1);
+
+            document.getElementById('stat-boxes').textContent = totalBoxes;
+            document.getElementById('stat-volume').textContent = `${cubicFeet.toFixed(1)} / 1,000 ft³`;
+            document.getElementById('stat-percent').textContent = `${percentUsed}%`;
+
+            const status3p = document.getElementById('stat-3p-text');
+            if (thirdPartyBoxes > 0) {
+                status3p.textContent = `${thirdPartyBoxes} Staged for Pickup`;
+            } else {
+                status3p.textContent = 'No Pending Pickups';
+            }
+        }
+
+        function switchTab(tab) {
+            ['inventory', 'add', 'logs'].forEach(t => {
+                const panel = document.getElementById(`panel-${t}`);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (t === tab) {
+                    panel.classList.remove('hidden');
+                    btn.className = 'tab-btn flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold bg-slate-800 text-white shadow';
+                } else {
+                    panel.classList.add('hidden');
+                    btn.className = 'tab-btn flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition';
+                }
+            });
+        }
+
+        // ============================================================================
+        // JSON BACKUP EXPORT / IMPORT & DEMO RESET
+        // ============================================================================
+        function exportData() {
+            const payload = {
+                exportedAt: new Date().toISOString(),
+                lockerDimensionsInches: { w: 120, d: 120, h: 120 },
+                boxes,
+                activityLogs
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lockergrid-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Exported JSON locker backup', 'success');
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed.boxes)) {
+                        boxes = parsed.boxes;
+                        activityLogs = Array.isArray(parsed.activityLogs) ? parsed.activityLogs : [];
+                        deselectBox();
+                        saveToStorage();
+                        syncBoxesTo3D();
+                        renderInventoryList();
+                        renderActivityLogs();
+                        updateStats();
+                        showToast(`Restored ${boxes.length} boxes from backup`, 'success');
+                    } else {
+                        showToast('Invalid locker backup file format', 'error');
+                    }
+                } catch (err) {
+                    showToast('Could not parse JSON file', 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function confirmResetDemo() {
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+        }
+
+        function executeResetDemo() {
+            boxes = JSON.parse(JSON.stringify(DEFAULT_BOXES));
+            activityLogs = JSON.parse(JSON.stringify(DEFAULT_LOGS));
+            deselectBox();
+            saveToStorage();
+            syncBoxesTo3D();
+            renderInventoryList();
+            renderActivityLogs();
+            updateStats();
+            closeConfirmModal();
+            showToast('Reset to sample technician inventory', 'info');
+        }
+
+        // ============================================================================
+        // TOAST NOTIFICATIONS & UTILITIES
+        // ============================================================================
+        let toastTimeout;
+        function showToast(msg, type = 'info') {
+            const banner = document.getElementById('toast-banner');
+            const msgEl = document.getElementById('toast-msg');
+            msgEl.textContent = msg;
+
+            const styles = {
+                success: 'bg-emerald-950/90 border-emerald-700/70 text-emerald-200',
+                warning: 'bg-amber-950/90 border-amber-700/70 text-amber-200',
+                error: 'bg-rose-950/90 border-rose-700/70 text-rose-200',
+                info: 'bg-sky-950/90 border-sky-700/70 text-sky-200'
+            };
+
+            banner.className = `mx-3 mt-3 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border ${styles[type] || styles.info}`;
+            banner.classList.remove('hidden');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(hideToast, 3500);
+        }
+
+        function hideToast() {
+            document.getElementById('toast-banner').classList.add('hidden');
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            if (!container || !renderer || !camera) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
