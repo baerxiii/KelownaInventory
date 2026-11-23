@@ -1,0 +1,2247 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LockerGrid 3D — Field Tech Inventory & Spatial Manager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Supabase JS UMD v2 (Works across desktop, mobile & older iPads without bundlers) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#090d16',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbars for Industrial Sleekness */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+        /* Range input styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Top Telemetry & Compact Action Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-20 shrink-0">
+        <!-- Brand & Locker ID -->
+        <div class="flex items-center gap-2.5">
+            <div class="bg-sky-500/10 border border-sky-500/30 p-1.5 rounded-lg text-sky-400">
+                <i data-lucide="box" class="w-4 h-4"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-bold text-sm tracking-tight text-white">LOCKERGRID <span class="text-sky-400 font-mono text-[11px] px-1.5 py-0.2 bg-sky-500/10 rounded border border-sky-500/20">10'×10'×10'</span></h1>
+                    <span id="sync-badge" onclick="openModal('modal-supabase')" class="cursor-pointer inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-500 transition" title="Configure Supabase Cloud Sync">
+                        <span id="sync-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                        <span id="sync-label">Local Mode</span>
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-400">Unit #402 • 120" × 120" × 120" Field Depot</p>
+            </div>
+        </div>
+
+        <!-- Live Space & Activity Metrics -->
+        <div class="flex items-center gap-3 md:gap-5 bg-slate-950/60 border border-slate-800/80 px-3 py-1 rounded-xl">
+            <div class="flex flex-col">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Boxes</span>
+                <span id="stat-boxes" class="font-mono text-xs font-bold text-white">0</span>
+            </div>
+            <div class="h-5 w-px bg-slate-800"></div>
+            <div class="flex flex-col">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Volume Used</span>
+                <div class="flex items-center gap-1.5">
+                    <span id="stat-volume" class="font-mono text-xs font-bold text-sky-400">0.0 / 1,000 ft³</span>
+                    <span id="stat-percent" class="text-[10px] font-mono px-1 bg-slate-800 rounded text-slate-300">0%</span>
+                </div>
+            </div>
+            <div class="h-5 w-px bg-slate-800 hidden sm:block"></div>
+            <div class="hidden sm:flex flex-col">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">3rd-Party Pickup</span>
+                <span id="stat-3p" class="font-mono text-[11px] font-medium text-amber-400 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="stat-3p-text">0 Staged</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Uniform Compact Action Buttons -->
+        <div class="flex items-center gap-1.5">
+            <button onclick="openModal('modal-add')" class="h-8 px-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow transition">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>Add Box</span>
+            </button>
+            <button onclick="openModal('modal-logs')" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+                <i data-lucide="clipboard-list" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span class="hidden sm:inline">Tech Log</span>
+            </button>
+            <button onclick="openModal('modal-supabase')" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition" title="Supabase Sync & SQL Schema">
+                <i data-lucide="database" class="w-3.5 h-3.5"></i>
+                <span class="hidden md:inline">Sync / SQL</span>
+            </button>
+            <button onclick="exportData()" title="Export JSON Backup" class="h-8 w-8 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center justify-center transition">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="confirmResetDemo()" title="Reset Sample Layout" class="h-8 w-8 bg-slate-800/60 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 rounded-lg border border-slate-800 flex items-center justify-center transition">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace: 3D Viewport + Compact Inventory Drawer -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <!-- Left / Top: 3D Interactive Locker Viewport -->
+        <main class="relative flex-1 bg-slate-950 min-h-[50vh] lg:min-h-0 flex flex-col">
+            <div id="canvas-container" class="flex-1"></div>
+
+            <!-- Hover Tooltip (Floating) -->
+            <div id="hover-tooltip" class="pointer-events-none fixed z-50 hidden bg-slate-900/95 backdrop-blur-md border border-slate-700 shadow-2xl rounded-xl p-3 text-xs w-64 transition-opacity duration-75">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                    <span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-amber-500 text-slate-950">ID #<span id="tt-tag">01</span></span>
+                    <span id="tt-category" class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300">Parts</span>
+                </div>
+                <div id="tt-name" class="font-bold text-sm text-white truncate mb-0.5">Part Name</div>
+                <div id="tt-desc" class="text-[11px] text-slate-400 line-clamp-2 mb-1.5">Part Description</div>
+                <div class="grid grid-cols-2 gap-1 text-slate-300 font-mono text-[11px] bg-slate-950/70 p-1.5 rounded-lg border border-slate-800">
+                    <div>Qty: <span id="tt-qty" class="text-white font-semibold">0</span></div>
+                    <div>Dim: <span id="tt-dim" class="text-white font-semibold">0×0×0"</span></div>
+                    <div class="col-span-2 text-slate-400">Pos: <span id="tt-pos" class="text-slate-200">X:0 Y:0 Z:0</span></div>
+                </div>
+            </div>
+
+            <!-- Top-Left Camera & View Controls Overlay -->
+            <div class="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 z-10">
+                <div class="bg-slate-900/90 backdrop-blur border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-lg">
+                    <button onclick="setCameraView('iso')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition" data-view="iso">Isometric</button>
+                    <button onclick="setCameraView('front')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="front">Door / Front</button>
+                    <button onclick="setCameraView('top')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="top">Top-Down</button>
+                    <button onclick="setCameraView('interior')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="interior">Interior</button>
+                </div>
+
+                <!-- Optional Zone/Shelf Guides Toggle -->
+                <button id="toggle-zones-btn" onclick="toggleZoneGuides()" class="h-9 bg-slate-900/90 backdrop-blur border border-slate-800 hover:border-slate-700 px-3 rounded-xl text-xs font-medium text-slate-300 flex items-center gap-1.5 shadow-lg transition">
+                    <i data-lucide="grid" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Zones: <strong id="zones-status" class="text-emerald-400">ON</strong></span>
+                </button>
+            </div>
+
+            <!-- Bottom-Left Legend / Orientation Helper -->
+            <div class="absolute bottom-3 left-3 pointer-events-none hidden sm:flex items-center gap-3 bg-slate-900/85 backdrop-blur border border-slate-800/90 px-3 py-1.5 rounded-xl text-[11px] text-slate-300">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Front Roll-Up Door (+Z)</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block"></span> 3rd-Party Pickup Zone</span>
+                <span class="text-slate-600">|</span>
+                <span class="text-slate-400">Click any 3D Box to Inspect or Log Pull</span>
+            </div>
+        </main>
+
+        <!-- Right Compact Sidebar: Searchable Inventory Directory -->
+        <aside class="w-full lg:w-[370px] xl:w-[400px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[50vh] lg:h-full shrink-0 z-10">
+
+            <!-- Toast Notification Banner -->
+            <div id="toast-banner" class="hidden mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0">
+                <span id="toast-msg">Notification</span>
+                <button onclick="hideToast()" class="text-current opacity-70 hover:opacity-100"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+            </div>
+
+            <!-- Search & Filter Header -->
+            <div class="p-3 border-b border-slate-800 space-y-2 shrink-0 bg-slate-900">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Locker Directory (<span id="tab-inv-count">0</span>)</span>
+                    <button onclick="openModal('modal-add')" class="text-[11px] text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1">
+                        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> New Box
+                    </button>
+                </div>
+                <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+                    <input type="text" id="search-input" oninput="renderInventoryList()" placeholder="Search 2-digit ID, PartName, or Description..." class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none">
+                </div>
+                <div class="flex items-center gap-1 overflow-x-auto pb-0.5">
+                    <button onclick="setCategoryFilter('ALL')" class="cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 whitespace-nowrap" data-cat="ALL">All</button>
+                    <button onclick="setCategoryFilter('Parts')" class="cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Parts">Parts</button>
+                    <button onclick="setCategoryFilter('Third-Party Pickup')" class="cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Third-Party Pickup">3rd-Party Pickup</button>
+                    <button onclick="setCategoryFilter('Tools')" class="cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Tools">Tools</button>
+                    <button onclick="setCategoryFilter('Consumables')" class="cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Consumables">Consumables</button>
+                    <button onclick="setCategoryFilter('Returns/RMA')" class="cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap" data-cat="Returns/RMA">RMA</button>
+                </div>
+            </div>
+
+            <!-- Scrollable Inventory Cards -->
+            <div id="inventory-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- Populated dynamically via JS -->
+            </div>
+        </aside>
+    </div>
+
+    <!-- ======================================================================== -->
+    <!-- MODAL 1: ADD NEW BOX TO LOCKER                                           -->
+    <!-- ======================================================================== -->
+    <div id="modal-add" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="package-plus" class="w-4 h-4 text-sky-400"></i>
+                    <h2 class="text-sm font-bold text-white">Add Box to 3D Locker</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-0.5 text-[10px]">
+                        <button type="button" id="unit-in-btn" onclick="setDimensionUnit('in')" class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold">Inches</button>
+                        <button type="button" id="unit-ft-btn" onclick="setDimensionUnit('ft')" class="px-2 py-0.5 rounded text-slate-400 hover:text-white">Feet</button>
+                    </div>
+                    <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <form id="add-box-form" onsubmit="handleAddBox(event)" class="p-4 overflow-y-auto space-y-3">
+                <!-- Row 1: 2-Digit Identifier + PartName -->
+                <div class="grid grid-cols-12 gap-2.5">
+                    <div class="col-span-4">
+                        <label class="block text-[11px] font-semibold text-amber-400 mb-1">2-Digit ID *</label>
+                        <input type="text" id="new-tag" maxlength="2" required placeholder="01" class="w-full bg-slate-950 border border-amber-500/50 focus:border-amber-400 rounded-lg px-2.5 py-2 text-sm font-mono font-bold uppercase text-center text-amber-300 outline-none">
+                    </div>
+                    <div class="col-span-8">
+                        <label class="block text-[11px] font-medium text-slate-300 mb-1">PartName *</label>
+                        <input type="text" id="new-name" required placeholder="e.g., Honeywell Zone Valves" class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                    </div>
+                </div>
+
+                <!-- Row 2: Part Description -->
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-300 mb-1">Part Description</label>
+                    <textarea id="new-desc" rows="2" placeholder="Model specs, voltage, shelf notes for 3rd-party tech..." class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-1.5 text-xs text-white outline-none resize-none"></textarea>
+                </div>
+
+                <!-- Row 3: Quantity, Category & Color -->
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-300 mb-1">Quantity</label>
+                        <input type="number" id="new-qty" value="1" min="0" required class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-300 mb-1">Zone / Type</label>
+                        <select id="new-category" onchange="autoColorForCategory(this.value)" class="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-2 py-1.5 text-xs text-white outline-none">
+                            <option value="Parts">Parts</option>
+                            <option value="Third-Party Pickup">3rd-Party Pickup</option>
+                            <option value="Tools">Tools</option>
+                            <option value="Consumables">Consumables</option>
+                            <option value="Returns/RMA">Returns/RMA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-300 mb-1">Box Color</label>
+                        <div class="flex items-center gap-1 pt-1" id="color-swatches">
+                            <button type="button" onclick="selectColor('#38bdf8')" data-color="#38bdf8" class="color-swatch w-5 h-5 rounded-full bg-[#38bdf8] ring-2 ring-white"></button>
+                            <button type="button" onclick="selectColor('#f59e0b')" data-color="#f59e0b" class="color-swatch w-5 h-5 rounded-full bg-[#f59e0b] opacity-70 hover:opacity-100"></button>
+                            <button type="button" onclick="selectColor('#10b981')" data-color="#10b981" class="color-swatch w-5 h-5 rounded-full bg-[#10b981] opacity-70 hover:opacity-100"></button>
+                            <button type="button" onclick="selectColor('#a855f7')" data-color="#a855f7" class="color-swatch w-5 h-5 rounded-full bg-[#a855f7] opacity-70 hover:opacity-100"></button>
+                            <button type="button" onclick="selectColor('#f43f5e')" data-color="#f43f5e" class="color-swatch w-5 h-5 rounded-full bg-[#f43f5e] opacity-70 hover:opacity-100"></button>
+                        </div>
+                        <input type="hidden" id="new-color" value="#38bdf8">
+                    </div>
+                </div>
+
+                <!-- Row 4: Box Dimensions -->
+                <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold text-slate-300">Box Dimensions (<span id="dim-unit-label">inches</span>)</span>
+                        <span class="text-[10px] text-slate-500">Locker Max: 120" (10 ft)</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">Width (X)</label>
+                            <input type="number" id="new-w" value="24" step="any" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-mono text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">Depth (Z)</label>
+                            <input type="number" id="new-d" value="18" step="any" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-mono text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">Height (Y)</label>
+                            <input type="number" id="new-h" value="18" step="any" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-mono text-white">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 5: Placement Strategy -->
+                <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-semibold text-slate-300">3D Placement</span>
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs text-sky-400 font-medium">
+                            <input type="checkbox" id="auto-place-check" checked onchange="toggleManualCoords(this.checked)" class="rounded bg-slate-800 border-slate-700 text-sky-500">
+                            <span>Smart Auto-Place / Stack</span>
+                        </label>
+                    </div>
+                    <div id="manual-coords-fields" class="hidden grid grid-cols-3 gap-2 pt-1">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">Pos X (in)</label>
+                            <input type="number" id="new-x" value="0" min="0" max="120" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">Pos Z (in)</label>
+                            <input type="number" id="new-z" value="0" min="0" max="120" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">Pos Y (in)</label>
+                            <input type="number" id="new-y" value="0" min="0" max="120" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-white">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" onclick="closeModal('modal-add')" class="h-9 px-3.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300">Cancel</button>
+                    <button type="submit" class="h-9 px-4 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs rounded-lg shadow flex items-center gap-1.5 transition">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        <span>Place in Locker</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ======================================================================== -->
+    <!-- MODAL 2: SELECTED BOX INSPECTOR & 3RD-PARTY ACCESS LOGGING               -->
+    <!-- ======================================================================== -->
+    <div id="modal-inspector" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-[2px] flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <!-- Header -->
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span id="insp-tag-badge" class="font-mono font-bold text-sm px-2.5 py-0.5 rounded-md bg-amber-500 text-slate-950 shrink-0">#01</span>
+                    <div class="min-w-0">
+                        <h3 id="insp-name" class="font-bold text-sm text-white truncate">Part Name</h3>
+                        <span id="insp-badge" class="text-[10px] font-semibold uppercase tracking-wider text-sky-400">Category</span>
+                    </div>
+                </div>
+                <button onclick="deselectBox()" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 rounded-lg border border-slate-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="p-4 overflow-y-auto space-y-3">
+                <!-- Editable PartName, 2-Digit ID & Part Description -->
+                <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="grid grid-cols-12 gap-2">
+                        <div class="col-span-3">
+                            <label class="block text-[10px] uppercase text-amber-400 font-semibold mb-0.5">2-Digit ID</label>
+                            <input type="text" id="insp-edit-tag" maxlength="2" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-mono font-bold uppercase text-center text-amber-300">
+                        </div>
+                        <div class="col-span-9">
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-0.5">PartName</label>
+                            <input type="text" id="insp-edit-name" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-0.5">Part Description</label>
+                        <textarea id="insp-edit-desc" rows="2" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 resize-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- Quick Stock, Rotate & Snap Actions -->
+                <div class="grid grid-cols-2 gap-2 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <div>
+                        <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">Quantity in Box</label>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="adjustSelectedQty(-1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">-</button>
+                            <input type="number" id="insp-qty" onchange="updateSelectedQtyDirect(this.value)" class="w-14 bg-slate-900 border border-slate-700 rounded text-center font-mono text-xs py-1 text-white">
+                            <button onclick="adjustSelectedQty(1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">+</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">Orientation & Snap</label>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="rotateSelectedBox()" class="flex-1 h-7 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 border border-slate-700" title="Rotate 90°">
+                                <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-sky-400"></i> 90°
+                            </button>
+                            <button onclick="autoStackSelectedBox()" class="flex-1 h-7 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 border border-slate-700" title="Auto-Snap to Open Spot">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Snap
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Position Sliders -->
+                <div class="space-y-1.5 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-semibold text-slate-300">3D Position (inches)</span>
+                        <span id="insp-dims-label" class="font-mono text-slate-400">24"W × 18"D × 18"H</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-14 font-mono text-slate-400">X (L/R):</span>
+                        <input type="range" id="insp-x" min="0" max="120" step="1" oninput="moveSelectedBox('x', this.value)" onchange="commitBoxMove()" class="flex-1">
+                        <span id="insp-x-val" class="w-9 text-right font-mono text-sky-300">0"</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-14 font-mono text-slate-400">Z (B/F):</span>
+                        <input type="range" id="insp-z" min="0" max="120" step="1" oninput="moveSelectedBox('z', this.value)" onchange="commitBoxMove()" class="flex-1">
+                        <span id="insp-z-val" class="w-9 text-right font-mono text-sky-300">0"</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-14 font-mono text-slate-400">Y (Hgt):</span>
+                        <input type="range" id="insp-y" min="0" max="120" step="1" oninput="moveSelectedBox('y', this.value)" onchange="commitBoxMove()" class="flex-1">
+                        <span id="insp-y-val" class="w-9 text-right font-mono text-sky-300">0"</span>
+                    </div>
+                </div>
+
+                <!-- Technician / 3rd-Party Check-Out Action -->
+                <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="text-[11px] font-semibold text-amber-400 flex items-center gap-1.5">
+                        <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+                        <span>Log Part Pull / 3rd-Party Access</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <select id="log-tech-select" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none">
+                            <option value="Self (Lead Tech)">Self (Lead Tech)</option>
+                            <option value="3rd-Party Tech">3rd-Party Tech</option>
+                        </select>
+                        <select id="log-action-select" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none">
+                            <option value="Pulled Parts">Pulled Parts (-Qty)</option>
+                            <option value="Restocked">Restocked (+Qty)</option>
+                            <option value="Checked Out Whole Box">Took Whole Box</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <input type="number" id="log-qty-input" value="1" min="1" class="w-14 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-mono text-white" title="Quantity">
+                        <input type="text" id="log-note-input" placeholder="Work Order # or note..." class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-500">
+                        <button onclick="submitBoxActivityLog()" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded transition">Log</button>
+                    </div>
+                </div>
+
+                <!-- Footer Delete & Done -->
+                <div class="flex items-center justify-between pt-1">
+                    <button onclick="deleteSelectedBox()" class="h-8 px-3 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove Box
+                    </button>
+                    <button onclick="deselectBox()" class="h-8 px-4 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs transition">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================== -->
+    <!-- MODAL 3: TECHNICIAN & 3RD-PARTY ACCESS LOG                               -->
+    <!-- ======================================================================== -->
+    <div id="modal-logs" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Chain of Custody & Tech Access Log</h2>
+                    <p class="text-[11px] text-slate-400">Synced history of Self & 3rd-Party tech pulls</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearLogs()" class="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 rounded bg-slate-800">Clear</button>
+                    <button onclick="closeModal('modal-logs')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="activity-log-list" class="flex-1 overflow-y-auto p-4 space-y-2">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================== -->
+    <!-- MODAL 4: SUPABASE MULTI-DEVICE SYNC & SQL TABLE SCHEMA                   -->
+    <!-- ======================================================================== -->
+    <div id="modal-supabase" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="database" class="w-4 h-4 text-emerald-400"></i>
+                    <h2 class="text-sm font-bold text-white">Supabase Real-Time Sync & PostgreSQL Schema</h2>
+                </div>
+                <button onclick="closeModal('modal-supabase')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="p-4 overflow-y-auto space-y-4 text-xs">
+                <!-- Connection Credentials -->
+                <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-200">1. Connect Your Supabase Project</span>
+                        <span id="modal-sync-status" class="font-mono text-[11px] text-amber-400">Not Connected (Using Local Storage)</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                        Paste your Supabase Project URL and Anon Public Key below (or hardcode them at the top of the HTML script) so both you and your 3rd-party tech see live 3D locker updates across all phones, tablets, and laptops.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Supabase Project URL</label>
+                            <input type="text" id="sb-url-input" placeholder="https://xyzcompany.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-xs text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Supabase Anon Public Key</label>
+                            <input type="password" id="sb-key-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-xs text-white outline-none">
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <button type="button" onclick="disconnectSupabase()" class="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium">Use Local Mode</button>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="pushLocalToSupabase()" class="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-medium">Push Local Boxes to Cloud</button>
+                            <button type="button" onclick="saveAndConnectSupabase()" class="h-8 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs">Save & Connect Live</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SQL Schema Box -->
+                <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-200">2. Run This SQL in Supabase SQL Editor</span>
+                        <button type="button" onclick="copySqlSchema()" class="h-7 px-3 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+                            <i data-lucide="copy" class="w-3 h-3"></i>
+                            <span id="copy-sql-text">Copy SQL Script</span>
+                        </button>
+                    </div>
+                    <pre id="supabase-sql-code" class="bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-[11px] text-emerald-300 overflow-x-auto leading-relaxed select-all">-- 1. Create Locker Inventory Table (10'x10'x10' / 120"x120"x120" Spatial Storage)
+CREATE TABLE IF NOT EXISTS public.locker_inventory (
+    id TEXT PRIMARY KEY,
+    locker_id TEXT NOT NULL DEFAULT 'UNIT-402',
+    tag_id VARCHAR(2) NOT NULL,               -- 2-Digit Identifier (e.g., '01', '14', 'A4')
+    part_name TEXT NOT NULL,                  -- PartName
+    part_description TEXT DEFAULT '',         -- Part Description
+    category TEXT NOT NULL DEFAULT 'Parts',
+    qty INTEGER NOT NULL DEFAULT 1,
+    w NUMERIC NOT NULL,                       -- Width (X) in inches
+    d NUMERIC NOT NULL,                       -- Depth (Z) in inches
+    h NUMERIC NOT NULL,                       -- Height (Y) in inches
+    x NUMERIC NOT NULL DEFAULT 0,             -- X coordinate (inches from Left Wall)
+    y NUMERIC NOT NULL DEFAULT 0,             -- Y coordinate (inches from Floor)
+    z NUMERIC NOT NULL DEFAULT 0,             -- Z coordinate (inches from Back Wall)
+    color TEXT NOT NULL DEFAULT '#38bdf8',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. Create Technician & 3rd-Party Chain-of-Custody Log Table
+CREATE TABLE IF NOT EXISTS public.locker_logs (
+    id TEXT PRIMARY KEY,
+    locker_id TEXT NOT NULL DEFAULT 'UNIT-402',
+    timestamp_label TEXT NOT NULL,
+    tech_name TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    tag_id VARCHAR(2) DEFAULT '--',
+    part_name TEXT NOT NULL,
+    qty INTEGER NOT NULL DEFAULT 1,
+    note TEXT DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3. Enable Row Level Security (RLS) & Open Policies for Shared Tech Access
+ALTER TABLE public.locker_inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.locker_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow shared read/write on locker_inventory"
+    ON public.locker_inventory FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow shared read/write on locker_logs"
+    ON public.locker_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- 4. Enable Realtime Replication so changes sync live across all devices
+ALTER PUBLICATION supabase_realtime ADD TABLE public.locker_inventory;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.locker_logs;</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div class="flex items-center gap-3 text-amber-400">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                <h3 class="font-bold text-base text-white">Reset Locker Layout?</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                This will reset the locker to the sample field technician layout.
+            </p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeConfirmModal()" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200">Cancel</button>
+                <button onclick="executeResetDemo()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white">Reset to Sample</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * LOCKERGRID 3D — SUPABASE REALTIME + FIELD TECH SPATIAL INVENTORY
+         * Written in clean ES5/standard browser JS for broad mobile, iPad & desktop support.
+         * ============================================================================
+         */
+
+        // Hardcode your Supabase credentials here for zero-setup deployment across devices,
+        // OR enter them anytime via the "Sync / SQL" button in the top bar:
+        var SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        var LOCKER_UNIT_ID = 'UNIT-402';
+
+        var LOCKER_SIZE = 120; // 10 feet = 120 inches
+        var STORAGE_KEY = 'lockergrid_3d_inventory_v2';
+        var LOGS_KEY = 'lockergrid_3d_logs_v2';
+        var SB_CREDS_KEY = 'lockergrid_supabase_creds_v1';
+
+        // Application State
+        var boxes = [];
+        var activityLogs = [];
+        var selectedBoxId = null;
+        var currentCategoryFilter = 'ALL';
+        var dimensionUnit = 'in';
+        var showZoneGuides = true;
+
+        // Supabase Client & Realtime Channel
+        var supabaseClient = null;
+        var realtimeChannel = null;
+        var isSupabaseConnected = false;
+
+        // Three.js Core Objects
+        var scene, camera, renderer, controls;
+        var lockerGroup, boxesGroup, zonesGroup;
+        var boxMeshes = {};
+        var raycaster, mouse;
+        var pointerDownPos = { x: 0, y: 0 };
+
+        // Default Realistic Technician Inventory Sample with 2-Digit IDs, PartName & Part Description
+        var DEFAULT_BOXES = [
+            {
+                id: 'box-101',
+                tagId: '01',
+                partName: 'HVAC Control Boards & Thermostats',
+                partDescription: 'Carrier & Trane 24V OEM control boards (Model HVC-8840). Keep dry on lower left tier.',
+                category: 'Parts',
+                qty: 14,
+                w: 30, d: 24, h: 20,
+                x: 4, y: 0, z: 4,
+                color: '#38bdf8'
+            },
+            {
+                id: 'box-102',
+                tagId: '02',
+                partName: '24VAC Transformers & Relays',
+                partDescription: 'Step-down class 2 transformers, DPST contactors, and spade terminal kits.',
+                category: 'Parts',
+                qty: 22,
+                w: 30, d: 24, h: 18,
+                x: 4, y: 20, z: 4,
+                color: '#0284c7'
+            },
+            {
+                id: 'box-103',
+                tagId: '03',
+                partName: 'Cat6 Plenum Cable Spools',
+                partDescription: 'Blue 1000ft CMP pull boxes + shielded pass-through RJ45 connectors.',
+                category: 'Consumables',
+                qty: 4,
+                w: 36, d: 24, h: 24,
+                x: 40, y: 0, z: 4,
+                color: '#10b981'
+            },
+            {
+                id: 'box-104',
+                tagId: '14',
+                partName: '3rd-Party Dispatch Kit (WO #4912)',
+                partDescription: 'Pre-staged actuator & sensor kit for Apex Subcontractor Tuesday AM call.',
+                category: 'Third-Party Pickup',
+                qty: 3,
+                w: 28, d: 22, h: 18,
+                x: 84, y: 0, z: 88,
+                color: '#f59e0b'
+            },
+            {
+                id: 'box-105',
+                tagId: '05',
+                partName: 'Fluke Meters & Manometer Case',
+                partDescription: 'Calibrated digital manometer, clamp meter, and static pressure probes.',
+                category: 'Tools',
+                qty: 2,
+                w: 26, d: 20, h: 16,
+                x: 88, y: 0, z: 8,
+                color: '#a855f7'
+            },
+            {
+                id: 'box-106',
+                tagId: '09',
+                partName: 'RMA Defective Actuators',
+                partDescription: 'Warranty return units with pre-paid UPS return label taped inside lid.',
+                category: 'Returns/RMA',
+                qty: 5,
+                w: 24, d: 20, h: 16,
+                x: 40, y: 24, z: 4,
+                color: '#f43f5e'
+            }
+        ];
+
+        var DEFAULT_LOGS = [
+            {
+                id: 'log-1',
+                timestamp: 'Nov 23 08:45 AM',
+                tech: 'Self (Lead Tech)',
+                action: 'Staged Box',
+                tagId: '14',
+                partName: '3rd-Party Dispatch Kit (WO #4912)',
+                qty: 3,
+                note: 'Placed in front-right pickup zone for contractor.'
+            },
+            {
+                id: 'log-2',
+                timestamp: 'Nov 21 04:15 PM',
+                tech: '3rd-Party Tech',
+                action: 'Pulled Parts',
+                tagId: '01',
+                partName: 'HVAC Control Boards & Thermostats',
+                qty: 2,
+                note: 'Emergency service call at Vernon Medical Plaza.'
+            }
+        ];
+
+        // ============================================================================
+        // INITIALIZATION, LOCAL STORAGE & SUPABASE REALTIME SYNC
+        // ============================================================================
+        function initApp() {
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+            loadLocalFallback();
+            initThreeJS();
+            syncBoxesTo3D();
+            renderInventoryList();
+            renderActivityLogs();
+            updateStats();
+            setCameraView('iso');
+            initSupabaseFromConfig();
+        }
+
+        function loadLocalFallback() {
+            try {
+                var savedBoxes = localStorage.getItem(STORAGE_KEY);
+                var savedLogs = localStorage.getItem(LOGS_KEY);
+                if (savedBoxes) {
+                    boxes = JSON.parse(savedBoxes);
+                } else {
+                    boxes = JSON.parse(JSON.stringify(DEFAULT_BOXES));
+                    saveLocalFallback();
+                }
+                if (savedLogs) {
+                    activityLogs = JSON.parse(savedLogs);
+                } else {
+                    activityLogs = JSON.parse(JSON.stringify(DEFAULT_LOGS));
+                    saveLocalFallback();
+                }
+            } catch (err) {
+                boxes = JSON.parse(JSON.stringify(DEFAULT_BOXES));
+                activityLogs = JSON.parse(JSON.stringify(DEFAULT_LOGS));
+            }
+        }
+
+        function saveLocalFallback() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(boxes));
+                localStorage.setItem(LOGS_KEY, JSON.stringify(activityLogs));
+            } catch (err) {
+                console.error('Local storage save error:', err);
+            }
+        }
+
+        function initSupabaseFromConfig() {
+            var activeUrl = SUPABASE_URL;
+            var activeKey = SUPABASE_ANON_KEY;
+
+            try {
+                var savedCreds = localStorage.getItem(SB_CREDS_KEY);
+                if (savedCreds) {
+                    var parsed = JSON.parse(savedCreds);
+                    if (parsed.url && parsed.key) {
+                        activeUrl = parsed.url;
+                        activeKey = parsed.key;
+                    }
+                }
+            } catch (e) {}
+
+            document.getElementById('sb-url-input').value = (activeUrl && activeUrl !== 'YOUR_SUPABASE_URL') ? activeUrl : '';
+            document.getElementById('sb-key-input').value = (activeKey && activeKey !== 'YOUR_SUPABASE_ANON_KEY') ? activeKey : '';
+
+            if (activeUrl && activeKey && activeUrl !== 'YOUR_SUPABASE_URL' && activeKey !== 'YOUR_SUPABASE_ANON_KEY') {
+                connectSupabase(activeUrl, activeKey);
+            } else {
+                updateSyncBadge(false, 'Local Mode');
+            }
+        }
+
+        function connectSupabase(url, key) {
+            if (!window.supabase || !window.supabase.createClient) {
+                showToast('Supabase SDK not loaded. Check internet connection.', 'error');
+                return;
+            }
+
+            try {
+                if (realtimeChannel && supabaseClient) {
+                    supabaseClient.removeChannel(realtimeChannel);
+                }
+
+                supabaseClient = window.supabase.createClient(url, key);
+                updateSyncBadge(false, 'Connecting...');
+
+                // Fetch initial cloud state
+                Promise.all([
+                    supabaseClient.from('locker_inventory').select('*').eq('locker_id', LOCKER_UNIT_ID),
+                    supabaseClient.from('locker_logs').select('*').eq('locker_id', LOCKER_UNIT_ID).order('created_at', { ascending: false }).limit(50)
+                ]).then(function(results) {
+                    var invRes = results[0];
+                    var logRes = results[1];
+
+                    if (invRes.error) {
+                        throw invRes.error;
+                    }
+
+                    isSupabaseConnected = true;
+                    updateSyncBadge(true, 'Live Cloud Sync');
+
+                    if (invRes.data && invRes.data.length > 0) {
+                        boxes = invRes.data.map(mapDbRowToBox);
+                        saveLocalFallback();
+                        syncBoxesTo3D();
+                        renderInventoryList();
+                        updateStats();
+                    } else if (boxes.length > 0) {
+                        // Cloud table is empty on first run; seed with current local boxes
+                        pushLocalToSupabase(true);
+                    }
+
+                    if (logRes.data && logRes.data.length > 0) {
+                        activityLogs = logRes.data.map(mapDbRowToLog);
+                        saveLocalFallback();
+                        renderActivityLogs();
+                    }
+
+                    subscribeToRealtime();
+                }).catch(function(err) {
+                    console.error('Supabase connection error:', err);
+                    isSupabaseConnected = false;
+                    updateSyncBadge(false, 'Sync Error (Local)');
+                    showToast('Supabase error: ' + (err.message || 'Check URL/Key & SQL tables'), 'error');
+                });
+            } catch (err) {
+                isSupabaseConnected = false;
+                updateSyncBadge(false, 'Local Mode');
+            }
+        }
+
+        function subscribeToRealtime() {
+            if (!supabaseClient) return;
+
+            realtimeChannel = supabaseClient
+                .channel('locker-sync-' + LOCKER_UNIT_ID)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'locker_inventory' }, function(payload) {
+                    handleRealtimeBoxChange(payload);
+                })
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'locker_logs' }, function(payload) {
+                    handleRealtimeLogInsert(payload);
+                })
+                .subscribe();
+        }
+
+        function handleRealtimeBoxChange(payload) {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                var row = payload.new;
+                if (row.locker_id !== LOCKER_UNIT_ID) return;
+                var updatedBox = mapDbRowToBox(row);
+                var idx = boxes.findIndex(function(b) { return b.id === updatedBox.id; });
+                if (idx >= 0) {
+                    boxes[idx] = updatedBox;
+                } else {
+                    boxes.push(updatedBox);
+                }
+            } else if (payload.eventType === 'DELETE') {
+                var oldRow = payload.old;
+                boxes = boxes.filter(function(b) { return b.id !== oldRow.id; });
+                if (selectedBoxId === oldRow.id) {
+                    deselectBox();
+                }
+            }
+
+            saveLocalFallback();
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+        }
+
+        function handleRealtimeLogInsert(payload) {
+            var row = payload.new;
+            if (!row || row.locker_id !== LOCKER_UNIT_ID) return;
+            var exists = activityLogs.some(function(l) { return l.id === row.id; });
+            if (!exists) {
+                activityLogs.unshift(mapDbRowToLog(row));
+                if (activityLogs.length > 50) activityLogs.pop();
+                saveLocalFallback();
+                renderActivityLogs();
+            }
+        }
+
+        function mapDbRowToBox(row) {
+            return {
+                id: row.id,
+                tagId: (row.tag_id || '00').toUpperCase(),
+                partName: row.part_name || 'Unnamed Part',
+                partDescription: row.part_description || '',
+                category: row.category || 'Parts',
+                qty: Number(row.qty) || 0,
+                w: Number(row.w) || 12,
+                d: Number(row.d) || 12,
+                h: Number(row.h) || 12,
+                x: Number(row.x) || 0,
+                y: Number(row.y) || 0,
+                z: Number(row.z) || 0,
+                color: row.color || '#38bdf8'
+            };
+        }
+
+        function mapBoxToDbRow(box) {
+            return {
+                id: box.id,
+                locker_id: LOCKER_UNIT_ID,
+                tag_id: (box.tagId || '00').toUpperCase().slice(0, 2),
+                part_name: box.partName,
+                part_description: box.partDescription || '',
+                category: box.category || 'Parts',
+                qty: box.qty,
+                w: box.w,
+                d: box.d,
+                h: box.h,
+                x: box.x,
+                y: box.y,
+                z: box.z,
+                color: box.color || '#38bdf8',
+                updated_at: new Date().toISOString()
+            };
+        }
+
+        function mapDbRowToLog(row) {
+            return {
+                id: row.id,
+                timestamp: row.timestamp_label,
+                tech: row.tech_name,
+                action: row.action_type,
+                tagId: row.tag_id || '--',
+                partName: row.part_name,
+                qty: Number(row.qty) || 0,
+                note: row.note || ''
+            };
+        }
+
+        function cloudUpsertBox(box) {
+            saveLocalFallback();
+            if (!isSupabaseConnected || !supabaseClient) return;
+            supabaseClient.from('locker_inventory').upsert(mapBoxToDbRow(box)).then(function(res) {
+                if (res.error) console.error('Cloud upsert box error:', res.error);
+            });
+        }
+
+        function cloudDeleteBox(boxId) {
+            saveLocalFallback();
+            if (!isSupabaseConnected || !supabaseClient) return;
+            supabaseClient.from('locker_inventory').delete().eq('id', boxId).then(function(res) {
+                if (res.error) console.error('Cloud delete box error:', res.error);
+            });
+        }
+
+        function cloudInsertLog(logEntry) {
+            saveLocalFallback();
+            if (!isSupabaseConnected || !supabaseClient) return;
+            supabaseClient.from('locker_logs').insert({
+                id: logEntry.id,
+                locker_id: LOCKER_UNIT_ID,
+                timestamp_label: logEntry.timestamp,
+                tech_name: logEntry.tech,
+                action_type: logEntry.action,
+                tag_id: logEntry.tagId || '--',
+                part_name: logEntry.partName,
+                qty: logEntry.qty,
+                note: logEntry.note || ''
+            }).then(function(res) {
+                if (res.error) console.error('Cloud insert log error:', res.error);
+            });
+        }
+
+        function saveAndConnectSupabase() {
+            var url = document.getElementById('sb-url-input').value.trim();
+            var key = document.getElementById('sb-key-input').value.trim();
+            if (!url || !key) {
+                showToast('Please enter both Supabase URL and Anon Key', 'warning');
+                return;
+            }
+            localStorage.setItem(SB_CREDS_KEY, JSON.stringify({ url: url, key: key }));
+            connectSupabase(url, key);
+            closeModal('modal-supabase');
+        }
+
+        function disconnectSupabase() {
+            localStorage.removeItem(SB_CREDS_KEY);
+            if (realtimeChannel && supabaseClient) {
+                supabaseClient.removeChannel(realtimeChannel);
+            }
+            supabaseClient = null;
+            isSupabaseConnected = false;
+            updateSyncBadge(false, 'Local Mode');
+            closeModal('modal-supabase');
+            showToast('Switched to Local Storage mode', 'info');
+        }
+
+        function pushLocalToSupabase(silent) {
+            if (!isSupabaseConnected || !supabaseClient) {
+                showToast('Connect to Supabase first before pushing', 'warning');
+                return;
+            }
+            var rows = boxes.map(mapBoxToDbRow);
+            supabaseClient.from('locker_inventory').upsert(rows).then(function(res) {
+                if (res.error) {
+                    showToast('Push failed: ' + res.error.message, 'error');
+                } else if (!silent) {
+                    showToast('Synced ' + rows.length + ' boxes to Supabase Cloud', 'success');
+                }
+            });
+        }
+
+        function updateSyncBadge(connected, text) {
+            var dot = document.getElementById('sync-dot');
+            var label = document.getElementById('sync-label');
+            var modalStatus = document.getElementById('modal-sync-status');
+
+            label.textContent = text;
+            if (connected) {
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+                if (modalStatus) {
+                    modalStatus.textContent = 'Connected • Live Multi-Device Sync Active';
+                    modalStatus.className = 'font-mono text-[11px] text-emerald-400';
+                }
+            } else {
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+                if (modalStatus) {
+                    modalStatus.textContent = text;
+                    modalStatus.className = 'font-mono text-[11px] text-amber-400';
+                }
+            }
+        }
+
+        function copySqlSchema() {
+            var sqlText = document.getElementById('supabase-sql-code').textContent;
+            var textarea = document.createElement('textarea');
+            textarea.value = sqlText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                var btnLabel = document.getElementById('copy-sql-text');
+                btnLabel.textContent = 'Copied!';
+                setTimeout(function() { btnLabel.textContent = 'Copy SQL Script'; }, 2000);
+                showToast('SQL schema copied to clipboard', 'success');
+            } catch (e) {
+                showToast('Select the SQL block and press Ctrl+C / Cmd+C', 'info');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // ============================================================================
+        // THREE.JS 3D LOCKER SCENE SETUP
+        // ============================================================================
+        function initThreeJS() {
+            var container = document.getElementById('canvas-container');
+            var width = container.clientWidth;
+            var height = container.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090d16);
+            scene.fog = new THREE.FogExp2(0x090d16, 0.0014);
+
+            camera = new THREE.PerspectiveCamera(45, width / height, 1, 1500);
+            camera.position.set(175, 165, 195);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 52, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.07;
+            controls.maxDistance = 420;
+            controls.minDistance = 30;
+            controls.maxPolarAngle = Math.PI * 0.495;
+            controls.update();
+
+            var ambientLight = new THREE.AmbientLight(0xdbeafe, 0.65);
+            scene.add(ambientLight);
+
+            var dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight.position.set(110, 210, 140);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 10;
+            dirLight.shadow.camera.far = 500;
+            var d = 100;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            var lockerLight = new THREE.PointLight(0x38bdf8, 0.5, 220);
+            lockerLight.position.set(0, 112, 0);
+            scene.add(lockerLight);
+
+            lockerGroup = new THREE.Group();
+            zonesGroup = new THREE.Group();
+            boxesGroup = new THREE.Group();
+            scene.add(lockerGroup);
+            scene.add(zonesGroup);
+            scene.add(boxesGroup);
+
+            buildLockerEnclosure();
+            buildFloorZones();
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            var domElem = renderer.domElement;
+            domElem.addEventListener('pointermove', onPointerMove);
+            domElem.addEventListener('pointerdown', onPointerDown);
+            domElem.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function buildLockerEnclosure() {
+            var floorGeo = new THREE.BoxGeometry(LOCKER_SIZE + 4, 2, LOCKER_SIZE + 4);
+            var floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.1 });
+            var floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            floorMesh.position.set(0, -1, 0);
+            floorMesh.receiveShadow = true;
+            lockerGroup.add(floorMesh);
+
+            var floorGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x38bdf8, 0x334155);
+            floorGrid.position.set(0, 0.1, 0);
+            lockerGroup.add(floorGrid);
+
+            var wallMat = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                transparent: true,
+                opacity: 0.55,
+                side: THREE.DoubleSide,
+                roughness: 0.7
+            });
+
+            var backWall = new THREE.Mesh(new THREE.PlaneGeometry(LOCKER_SIZE, LOCKER_SIZE), wallMat);
+            backWall.position.set(0, LOCKER_SIZE / 2, -LOCKER_SIZE / 2);
+            lockerGroup.add(backWall);
+
+            var backGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x1e293b, 0x1e293b);
+            backGrid.rotation.x = Math.PI / 2;
+            backGrid.position.set(0, LOCKER_SIZE / 2, -LOCKER_SIZE / 2 + 0.1);
+            lockerGroup.add(backGrid);
+
+            var leftWall = new THREE.Mesh(new THREE.PlaneGeometry(LOCKER_SIZE, LOCKER_SIZE), wallMat);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-LOCKER_SIZE / 2, LOCKER_SIZE / 2, 0);
+            lockerGroup.add(leftWall);
+
+            var leftGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x1e293b, 0x1e293b);
+            leftGrid.rotation.z = Math.PI / 2;
+            leftGrid.position.set(-LOCKER_SIZE / 2 + 0.1, LOCKER_SIZE / 2, 0);
+            lockerGroup.add(leftGrid);
+
+            var frameGeo = new THREE.BoxGeometry(LOCKER_SIZE, LOCKER_SIZE, LOCKER_SIZE);
+            var edgesGeo = new THREE.EdgesGeometry(frameGeo);
+            var frameMat = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 });
+            var frameWire = new THREE.LineSegments(edgesGeo, frameMat);
+            frameWire.position.set(0, LOCKER_SIZE / 2, 0);
+            lockerGroup.add(frameWire);
+
+            // Front Roll-Up Door Threshold (+Z = +60)
+            var thresholdGeo = new THREE.BoxGeometry(LOCKER_SIZE, 0.8, 2.5);
+            var thresholdMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+            var threshold = new THREE.Mesh(thresholdGeo, thresholdMat);
+            threshold.position.set(0, 0.4, LOCKER_SIZE / 2);
+            lockerGroup.add(threshold);
+
+            var drumGeo = new THREE.CylinderGeometry(4, 4, LOCKER_SIZE - 4, 16);
+            drumGeo.rotateZ(Math.PI / 2);
+            var drumMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.4 });
+            var drum = new THREE.Mesh(drumGeo, drumMat);
+            drum.position.set(0, LOCKER_SIZE - 4, LOCKER_SIZE / 2 - 2);
+            lockerGroup.add(drum);
+
+            var doorLabel = createTextSprite('FRONT DOOR (10\' WIDE)', '#10b981', 'rgba(15, 23, 42, 0.85)');
+            doorLabel.position.set(0, 2, LOCKER_SIZE / 2 + 12);
+            doorLabel.scale.set(42, 10.5, 1);
+            lockerGroup.add(doorLabel);
+
+            for (var ft = 2; ft <= 10; ft += 2) {
+                var tickLabel = createTextSprite(ft + "'", '#94a3b8', 'rgba(15, 23, 42, 0.6)');
+                tickLabel.position.set(-LOCKER_SIZE / 2 - 6, ft * 12, LOCKER_SIZE / 2);
+                tickLabel.scale.set(14, 5, 1);
+                lockerGroup.add(tickLabel);
+            }
+        }
+
+        function buildFloorZones() {
+            var zoneW = 48;
+            var zoneD = 48;
+            var zoneGeo = new THREE.PlaneGeometry(zoneW, zoneD);
+            var zoneMat = new THREE.MeshBasicMaterial({
+                color: 0xf59e0b,
+                transparent: true,
+                opacity: 0.16,
+                side: THREE.DoubleSide
+            });
+            var zoneMesh = new THREE.Mesh(zoneGeo, zoneMat);
+            zoneMesh.rotation.x = -Math.PI / 2;
+            zoneMesh.position.set(36, 0.25, 36);
+            zonesGroup.add(zoneMesh);
+
+            var borderEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(zoneW, 0.2, zoneD));
+            var borderLine = new THREE.LineSegments(borderEdges, new THREE.LineBasicMaterial({ color: 0xf59e0b }));
+            borderLine.position.set(36, 0.3, 36);
+            zonesGroup.add(borderLine);
+
+            var zoneSprite = createTextSprite('3RD-PARTY PICKUP ZONE', '#fbbf24', 'rgba(15, 23, 42, 0.85)');
+            zoneSprite.position.set(36, 1.5, 36);
+            zoneSprite.scale.set(36, 9, 1);
+            zonesGroup.add(zoneSprite);
+
+            var aisleGeo = new THREE.PlaneGeometry(24, 96);
+            var aisleMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.06,
+                side: THREE.DoubleSide
+            });
+            var aisleMesh = new THREE.Mesh(aisleGeo, aisleMat);
+            aisleMesh.rotation.x = -Math.PI / 2;
+            aisleMesh.position.set(0, 0.2, 12);
+            zonesGroup.add(aisleMesh);
+        }
+
+        function toggleZoneGuides() {
+            showZoneGuides = !showZoneGuides;
+            zonesGroup.visible = showZoneGuides;
+            var statusEl = document.getElementById('zones-status');
+            statusEl.textContent = showZoneGuides ? 'ON' : 'OFF';
+            statusEl.className = showZoneGuides ? 'text-emerald-400' : 'text-slate-500';
+        }
+
+        function createTextSprite(text, textColor, bgColor) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            var ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor || 'rgba(15,23,42,0.85)';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(12, 16, 488, 96, 24);
+            } else {
+                ctx.rect(12, 16, 488, 96);
+            }
+            ctx.fill();
+
+            ctx.fillStyle = textColor || '#ffffff';
+            ctx.font = 'bold 34px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 66);
+
+            var texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            var material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+            return new THREE.Sprite(material);
+        }
+
+        // High-contrast 2-Digit Identifier Badge Sprite floating directly above each 3D box
+        function createTwoDigitBadgeSprite(tagId, partName) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 160;
+            var ctx = canvas.getContext('2d');
+
+            // Main dark pill container
+            ctx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(8, 16, 496, 128, 28);
+            } else {
+                ctx.rect(8, 16, 496, 128);
+            }
+            ctx.fill();
+
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 6;
+            ctx.stroke();
+
+            // Left Amber Square for 2-Digit ID
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(22, 30, 112, 100, 18);
+            } else {
+                ctx.rect(22, 30, 112, 100);
+            }
+            ctx.fill();
+
+            // 2-Digit Text
+            ctx.fillStyle = '#090d16';
+            ctx.font = 'bold 56px JetBrains Mono, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText((tagId || '00').toUpperCase(), 78, 82);
+
+            // PartName next to the 2-digit badge
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 30px Inter, sans-serif';
+            ctx.textAlign = 'left';
+            var clippedName = (partName || '').length > 18 ? partName.slice(0, 17) + '…' : partName;
+            ctx.fillText(clippedName, 152, 82);
+
+            var texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            var material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+            return new THREE.Sprite(material);
+        }
+
+        // ============================================================================
+        // RENDERING & SYNCHRONIZING 3D BOXES
+        // ============================================================================
+        function syncBoxesTo3D() {
+            var validIds = {};
+            boxes.forEach(function(b) { validIds[b.id] = true; });
+
+            Object.keys(boxMeshes).forEach(function(id) {
+                if (!validIds[id]) {
+                    boxesGroup.remove(boxMeshes[id]);
+                    delete boxMeshes[id];
+                }
+            });
+
+            boxes.forEach(function(box) {
+                var group = boxMeshes[box.id];
+                var isSelected = box.id === selectedBoxId;
+
+                if (!group) {
+                    group = new THREE.Group();
+                    group.userData = { boxId: box.id };
+                    boxesGroup.add(group);
+                    boxMeshes[box.id] = group;
+                } else {
+                    while (group.children.length > 0) {
+                        group.remove(group.children[0]);
+                    }
+                }
+
+                var geo = new THREE.BoxGeometry(box.w, box.h, box.d);
+                var baseColor = new THREE.Color(box.color || '#38bdf8');
+
+                var mat = new THREE.MeshStandardMaterial({
+                    color: baseColor,
+                    roughness: 0.45,
+                    metalness: 0.15,
+                    emissive: isSelected ? baseColor : new THREE.Color(0x000000),
+                    emissiveIntensity: isSelected ? 0.35 : 0
+                });
+
+                var mesh = new THREE.Mesh(geo, mat);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData = { boxId: box.id };
+                group.add(mesh);
+
+                var edges = new THREE.EdgesGeometry(geo);
+                var lineMat = new THREE.LineBasicMaterial({
+                    color: isSelected ? 0xffffff : 0x090d16,
+                    linewidth: isSelected ? 2 : 1
+                });
+                var wireframe = new THREE.LineSegments(edges, lineMat);
+                group.add(wireframe);
+
+                if (isSelected) {
+                    var haloGeo = new THREE.BoxGeometry(box.w + 1.5, box.h + 1.5, box.d + 1.5);
+                    var haloEdges = new THREE.EdgesGeometry(haloGeo);
+                    var haloLine = new THREE.LineSegments(haloEdges, new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+                    group.add(haloLine);
+                }
+
+                // Prominent 2-Digit Identifier + PartName Floating Label
+                var badgeSprite = createTwoDigitBadgeSprite(box.tagId, box.partName);
+                badgeSprite.position.set(0, box.h / 2 + 4, 0);
+                var spriteScale = Math.max(20, Math.min(box.w * 1.15, 34));
+                badgeSprite.scale.set(spriteScale, spriteScale * 0.31, 1);
+                group.add(badgeSprite);
+
+                var worldX = box.x + (box.w / 2) - (LOCKER_SIZE / 2);
+                var worldY = box.y + (box.h / 2);
+                var worldZ = box.z + (box.d / 2) - (LOCKER_SIZE / 2);
+                group.position.set(worldX, worldY, worldZ);
+            });
+        }
+
+        // ============================================================================
+        // SPATIAL COLLISION DETECTION & SMART AUTO-PLACEMENT / STACKING
+        // ============================================================================
+        function checkAABBOverlap(a, b) {
+            var eps = 0.05;
+            return (
+                a.x < b.x + b.w - eps &&
+                a.x + a.w > b.x + eps &&
+                a.y < b.y + b.h - eps &&
+                a.y + a.h > b.y + eps &&
+                a.z < b.z + b.d - eps &&
+                a.z + a.d > b.z + eps
+            );
+        }
+
+        function isValidPlacement(candidate, ignoreBoxId) {
+            if (
+                candidate.x < 0 ||
+                candidate.y < 0 ||
+                candidate.z < 0 ||
+                candidate.x + candidate.w > LOCKER_SIZE ||
+                candidate.y + candidate.h > LOCKER_SIZE ||
+                candidate.z + candidate.d > LOCKER_SIZE
+            ) {
+                return false;
+            }
+
+            for (var i = 0; i < boxes.length; i++) {
+                var other = boxes[i];
+                if (other.id === ignoreBoxId) continue;
+                if (checkAABBOverlap(candidate, other)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function findSmartPosition(w, d, h, category, ignoreBoxId) {
+            var step = 4;
+
+            if (category === 'Third-Party Pickup') {
+                for (var z = LOCKER_SIZE - d - 4; z >= 68; z -= step) {
+                    for (var x = LOCKER_SIZE - w - 4; x >= 68; x -= step) {
+                        var cand3p = { x: x, y: 0, z: z, w: w, d: d, h: h };
+                        if (isValidPlacement(cand3p, ignoreBoxId)) return { x: x, y: 0, z: z };
+                    }
+                }
+            }
+
+            for (var fz = 4; fz <= LOCKER_SIZE - d - 2; fz += step) {
+                for (var fx = 4; fx <= LOCKER_SIZE - w - 2; fx += step) {
+                    var candFloor = { x: fx, y: 0, z: fz, w: w, d: d, h: h };
+                    if (isValidPlacement(candFloor, ignoreBoxId)) {
+                        return { x: fx, y: 0, z: fz };
+                    }
+                }
+            }
+
+            var sortedBases = boxes
+                .filter(function(b) { return b.id !== ignoreBoxId; })
+                .sort(function(a, b) { return (a.y + a.h) - (b.y + b.h); });
+
+            for (var i = 0; i < sortedBases.length; i++) {
+                var base = sortedBases[i];
+                var stackY = base.y + base.h;
+                if (stackY + h <= LOCKER_SIZE) {
+                    var candStack = { x: base.x, y: stackY, z: base.z, w: w, d: d, h: h };
+                    if (isValidPlacement(candStack, ignoreBoxId)) {
+                        return { x: base.x, y: stackY, z: base.z };
+                    }
+                }
+            }
+
+            return { x: 0, y: 0, z: 0 };
+        }
+
+        // ============================================================================
+        // RAYCASTING, HOVER TOOLTIP & BOX SELECTION
+        // ============================================================================
+        function onPointerDown(event) {
+            pointerDownPos = { x: event.clientX, y: event.clientY };
+        }
+
+        function onPointerUp(event) {
+            var dist = Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y);
+            if (dist > 5) return;
+
+            var rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            var meshes = [];
+            boxesGroup.children.forEach(function(group) {
+                if (group.children[0]) meshes.push(group.children[0]);
+            });
+
+            var intersects = raycaster.intersectObjects(meshes, false);
+            if (intersects.length > 0) {
+                var clickedId = intersects[0].object.userData.boxId;
+                selectBox(clickedId, false);
+            }
+        }
+
+        function onPointerMove(event) {
+            var rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            var meshes = [];
+            boxesGroup.children.forEach(function(group) {
+                if (group.children[0]) meshes.push(group.children[0]);
+            });
+
+            var intersects = raycaster.intersectObjects(meshes, false);
+            var tooltip = document.getElementById('hover-tooltip');
+
+            if (intersects.length > 0) {
+                var hitId = intersects[0].object.userData.boxId;
+                var box = boxes.find(function(b) { return b.id === hitId; });
+                if (box) {
+                    renderer.domElement.style.cursor = 'pointer';
+                    document.getElementById('tt-tag').textContent = box.tagId;
+                    document.getElementById('tt-category').textContent = box.category;
+                    document.getElementById('tt-name').textContent = box.partName;
+                    document.getElementById('tt-desc').textContent = box.partDescription || 'No description';
+                    document.getElementById('tt-qty').textContent = box.qty;
+                    document.getElementById('tt-dim').textContent = box.w + '×' + box.d + '×' + box.h + '"';
+                    document.getElementById('tt-pos').textContent = 'X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"';
+
+                    tooltip.style.left = Math.min(window.innerWidth - 270, event.clientX + 14) + 'px';
+                    tooltip.style.top = Math.min(window.innerHeight - 150, event.clientY + 14) + 'px';
+                    tooltip.classList.remove('hidden');
+                    return;
+                }
+            }
+
+            renderer.domElement.style.cursor = 'grab';
+            tooltip.classList.add('hidden');
+        }
+
+        // ============================================================================
+        // CAMERA PRESETS & FOCUS
+        // ============================================================================
+        function setCameraView(view) {
+            document.querySelectorAll('.cam-btn').forEach(function(btn) {
+                if (btn.dataset.view === view) {
+                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition';
+                } else {
+                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
+                }
+            });
+
+            switch (view) {
+                case 'iso':
+                    camera.position.set(170, 160, 190);
+                    controls.target.set(0, 50, 0);
+                    break;
+                case 'front':
+                    camera.position.set(0, 65, 225);
+                    controls.target.set(0, 55, 0);
+                    break;
+                case 'top':
+                    camera.position.set(0, 240, 15);
+                    controls.target.set(0, 0, 0);
+                    break;
+                case 'interior':
+                    camera.position.set(0, 62, 56);
+                    controls.target.set(0, 48, -20);
+                    break;
+            }
+            controls.update();
+        }
+
+        function focusCameraOnBox(box) {
+            var worldX = box.x + (box.w / 2) - (LOCKER_SIZE / 2);
+            var worldY = box.y + (box.h / 2);
+            var worldZ = box.z + (box.d / 2) - (LOCKER_SIZE / 2);
+
+            controls.target.set(worldX, worldY, worldZ);
+            camera.position.set(worldX + 85, Math.min(180, worldY + 75), worldZ + 95);
+            controls.update();
+        }
+
+        // ============================================================================
+        // BOX SELECTION, EDITING & INSPECTOR MODAL CONTROLS
+        // ============================================================================
+        function selectBox(id, shouldFocusCamera) {
+            selectedBoxId = id;
+            var box = boxes.find(function(b) { return b.id === id; });
+            if (!box) return;
+
+            document.getElementById('insp-tag-badge').textContent = '#' + box.tagId;
+            document.getElementById('insp-name').textContent = box.partName;
+            document.getElementById('insp-badge').textContent = box.category;
+
+            document.getElementById('insp-edit-tag').value = box.tagId;
+            document.getElementById('insp-edit-name').value = box.partName;
+            document.getElementById('insp-edit-desc').value = box.partDescription || '';
+
+            document.getElementById('insp-qty').value = box.qty;
+            document.getElementById('insp-dims-label').textContent = box.w + '"W × ' + box.d + '"D × ' + box.h + '"H';
+
+            var xSlider = document.getElementById('insp-x');
+            var zSlider = document.getElementById('insp-z');
+            var ySlider = document.getElementById('insp-y');
+
+            xSlider.max = Math.max(0, LOCKER_SIZE - box.w);
+            zSlider.max = Math.max(0, LOCKER_SIZE - box.d);
+            ySlider.max = Math.max(0, LOCKER_SIZE - box.h);
+
+            xSlider.value = box.x;
+            zSlider.value = box.z;
+            ySlider.value = box.y;
+
+            document.getElementById('insp-x-val').textContent = box.x + '"';
+            document.getElementById('insp-z-val').textContent = box.z + '"';
+            document.getElementById('insp-y-val').textContent = box.y + '"';
+
+            if (shouldFocusCamera) {
+                focusCameraOnBox(box);
+            }
+
+            openModal('modal-inspector');
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function deselectBox() {
+            selectedBoxId = null;
+            closeModal('modal-inspector');
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function updateSelectedMeta() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+
+            var cleanTag = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 2) || '00';
+            var cleanName = document.getElementById('insp-edit-name').value.trim() || box.partName;
+            var cleanDesc = document.getElementById('insp-edit-desc').value.trim();
+
+            box.tagId = cleanTag;
+            box.partName = cleanName;
+            box.partDescription = cleanDesc;
+
+            document.getElementById('insp-tag-badge').textContent = '#' + cleanTag;
+            document.getElementById('insp-name').textContent = cleanName;
+
+            cloudUpsertBox(box);
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function moveSelectedBox(axis, val) {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+
+            var numVal = parseInt(val, 10);
+            var maxVal = axis === 'x' ? LOCKER_SIZE - box.w : axis === 'z' ? LOCKER_SIZE - box.d : LOCKER_SIZE - box.h;
+            var clamped = Math.max(0, Math.min(maxVal, numVal));
+
+            box[axis] = clamped;
+            document.getElementById('insp-' + axis + '-val').textContent = clamped + '"';
+            syncBoxesTo3D();
+        }
+
+        function commitBoxMove() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+            cloudUpsertBox(box);
+            renderInventoryList();
+        }
+
+        function rotateSelectedBox() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+
+            var newW = box.d;
+            var newD = box.w;
+
+            box.w = newW;
+            box.d = newD;
+            box.x = Math.min(box.x, LOCKER_SIZE - box.w);
+            box.z = Math.min(box.z, LOCKER_SIZE - box.d);
+
+            cloudUpsertBox(box);
+            selectBox(box.id, false);
+            showToast('Rotated Box #' + box.tagId + ' 90°', 'info');
+        }
+
+        function autoStackSelectedBox() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+
+            var pos = findSmartPosition(box.w, box.d, box.h, box.category, box.id);
+            box.x = pos.x;
+            box.y = pos.y;
+            box.z = pos.z;
+
+            cloudUpsertBox(box);
+            selectBox(box.id, true);
+            showToast('Snapped #' + box.tagId + ' to X:' + pos.x + '" Y:' + pos.y + '" Z:' + pos.z + '"', 'success');
+        }
+
+        function adjustSelectedQty(delta) {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+            box.qty = Math.max(0, box.qty + delta);
+            document.getElementById('insp-qty').value = box.qty;
+            cloudUpsertBox(box);
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function updateSelectedQtyDirect(val) {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+            box.qty = Math.max(0, parseInt(val, 10) || 0);
+            cloudUpsertBox(box);
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function deleteSelectedBox() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+
+            addActivityLog('Self (Lead Tech)', 'Removed Box', box.tagId, box.partName, box.qty, 'Removed from 3D locker.');
+            var deletedId = box.id;
+            boxes = boxes.filter(function(b) { return b.id !== deletedId; });
+            deselectBox();
+            cloudDeleteBox(deletedId);
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            showToast('Removed Box #' + box.tagId + ' (' + box.partName + ')', 'info');
+        }
+
+        // ============================================================================
+        // ADDING A NEW BOX FORM LOGIC
+        // ============================================================================
+        function suggestNextTwoDigitId() {
+            var used = {};
+            boxes.forEach(function(b) { used[String(b.tagId).toUpperCase()] = true; });
+            for (var i = 1; i <= 99; i++) {
+                var candidate = i < 10 ? '0' + i : String(i);
+                if (!used[candidate]) return candidate;
+            }
+            return '01';
+        }
+
+        function setDimensionUnit(unit) {
+            dimensionUnit = unit;
+            var inBtn = document.getElementById('unit-in-btn');
+            var ftBtn = document.getElementById('unit-ft-btn');
+            var label = document.getElementById('dim-unit-label');
+
+            var wInput = document.getElementById('new-w');
+            var dInput = document.getElementById('new-d');
+            var hInput = document.getElementById('new-h');
+
+            if (unit === 'ft') {
+                inBtn.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white';
+                ftBtn.className = 'px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold';
+                label.textContent = 'feet';
+                wInput.max = 10; dInput.max = 10; hInput.max = 10;
+                wInput.value = +(parseFloat(wInput.value) / 12).toFixed(2);
+                dInput.value = +(parseFloat(dInput.value) / 12).toFixed(2);
+                hInput.value = +(parseFloat(hInput.value) / 12).toFixed(2);
+            } else {
+                ftBtn.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white';
+                inBtn.className = 'px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold';
+                label.textContent = 'inches';
+                wInput.max = 120; dInput.max = 120; hInput.max = 120;
+                wInput.value = Math.round(parseFloat(wInput.value) * 12);
+                dInput.value = Math.round(parseFloat(dInput.value) * 12);
+                hInput.value = Math.round(parseFloat(hInput.value) * 12);
+            }
+        }
+
+        function toggleManualCoords(isAuto) {
+            var fields = document.getElementById('manual-coords-fields');
+            if (isAuto) {
+                fields.classList.add('hidden');
+            } else {
+                fields.classList.remove('hidden');
+            }
+        }
+
+        function selectColor(hex) {
+            document.getElementById('new-color').value = hex;
+            document.querySelectorAll('.color-swatch').forEach(function(btn) {
+                if (btn.dataset.color === hex) {
+                    btn.classList.add('ring-2', 'ring-white', 'opacity-100');
+                    btn.classList.remove('opacity-70');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-white', 'opacity-100');
+                    btn.classList.add('opacity-70');
+                }
+            });
+        }
+
+        function autoColorForCategory(cat) {
+            var map = {
+                'Parts': '#38bdf8',
+                'Third-Party Pickup': '#f59e0b',
+                'Tools': '#a855f7',
+                'Consumables': '#10b981',
+                'Returns/RMA': '#f43f5e'
+            };
+            if (map[cat]) selectColor(map[cat]);
+        }
+
+        function handleAddBox(event) {
+            event.preventDefault();
+
+            var rawTag = document.getElementById('new-tag').value.trim().toUpperCase();
+            var tagId = rawTag.length === 1 ? '0' + rawTag : rawTag.slice(0, 2);
+            var partName = document.getElementById('new-name').value.trim();
+            var partDescription = document.getElementById('new-desc').value.trim();
+            var qty = parseInt(document.getElementById('new-qty').value, 10) || 1;
+            var category = document.getElementById('new-category').value;
+            var color = document.getElementById('new-color').value;
+
+            var rawW = parseFloat(document.getElementById('new-w').value);
+            var rawD = parseFloat(document.getElementById('new-d').value);
+            var rawH = parseFloat(document.getElementById('new-h').value);
+
+            if (dimensionUnit === 'ft') {
+                rawW *= 12;
+                rawD *= 12;
+                rawH *= 12;
+            }
+
+            var w = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawW)));
+            var d = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawD)));
+            var h = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawH)));
+
+            var isAuto = document.getElementById('auto-place-check').checked;
+            var pos = { x: 0, y: 0, z: 0 };
+
+            if (isAuto) {
+                pos = findSmartPosition(w, d, h, category, null);
+            } else {
+                pos.x = Math.max(0, Math.min(LOCKER_SIZE - w, parseInt(document.getElementById('new-x').value, 10) || 0));
+                pos.z = Math.max(0, Math.min(LOCKER_SIZE - d, parseInt(document.getElementById('new-z').value, 10) || 0));
+                pos.y = Math.max(0, Math.min(LOCKER_SIZE - h, parseInt(document.getElementById('new-y').value, 10) || 0));
+            }
+
+            var newBox = {
+                id: 'box-' + Date.now(),
+                tagId: tagId,
+                partName: partName,
+                partDescription: partDescription,
+                category: category,
+                qty: qty,
+                w: w, d: d, h: h,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                color: color
+            };
+
+            boxes.push(newBox);
+            addActivityLog('Self (Lead Tech)', 'Added Box', tagId, partName, qty, 'Placed at X:' + pos.x + '" Y:' + pos.y + '" Z:' + pos.z + '"');
+
+            cloudUpsertBox(newBox);
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            closeModal('modal-add');
+            focusCameraOnBox(newBox);
+
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-desc').value = '';
+            showToast('Placed Box #' + tagId + ' (' + partName + ') in locker', 'success');
+        }
+
+        // ============================================================================
+        // TECHNICIAN & 3RD-PARTY ACCESS LOGGING
+        // ============================================================================
+        function submitBoxActivityLog() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
+            if (!box) return;
+
+            var tech = document.getElementById('log-tech-select').value;
+            var action = document.getElementById('log-action-select').value;
+            var qty = Math.max(1, parseInt(document.getElementById('log-qty-input').value, 10) || 1);
+            var note = document.getElementById('log-note-input').value.trim();
+
+            if (action === 'Pulled Parts') {
+                box.qty = Math.max(0, box.qty - qty);
+                cloudUpsertBox(box);
+            } else if (action === 'Restocked') {
+                box.qty += qty;
+                cloudUpsertBox(box);
+            } else if (action === 'Checked Out Whole Box') {
+                addActivityLog(tech, action, box.tagId, box.partName, box.qty, note || 'Checked out entire box.');
+                var deletedId = box.id;
+                boxes = boxes.filter(function(b) { return b.id !== deletedId; });
+                deselectBox();
+                cloudDeleteBox(deletedId);
+                syncBoxesTo3D();
+                renderInventoryList();
+                updateStats();
+                showToast(tech + ' checked out Box #' + box.tagId, 'warning');
+                return;
+            }
+
+            addActivityLog(tech, action, box.tagId, box.partName, qty, note);
+            document.getElementById('log-note-input').value = '';
+
+            selectBox(box.id, false);
+            updateStats();
+            showToast('Logged: ' + tech + ' — ' + action + ' (#' + box.tagId + ')', 'success');
+        }
+
+        function addActivityLog(tech, action, tagId, partName, qty, note) {
+            var now = new Date();
+            var timestamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+                            now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            var entry = {
+                id: 'log-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+                timestamp: timestamp,
+                tech: tech,
+                action: action,
+                tagId: tagId || '--',
+                partName: partName,
+                qty: qty,
+                note: note
+            };
+
+            activityLogs.unshift(entry);
+            if (activityLogs.length > 50) activityLogs.pop();
+            cloudInsertLog(entry);
+            renderActivityLogs();
+        }
+
+        function clearLogs() {
+            activityLogs = [];
+            saveLocalFallback();
+            renderActivityLogs();
+        }
+
+        function renderActivityLogs() {
+            var container = document.getElementById('activity-log-list');
+            if (activityLogs.length === 0) {
+                container.innerHTML = '<div class="text-center text-xs text-slate-500 py-8">No technician activity logged yet.</div>';
+                return;
+            }
+
+            container.innerHTML = activityLogs.map(function(log) {
+                var is3P = log.tech.indexOf('3rd-Party') !== -1;
+                var badgeClass = is3P
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    : 'bg-sky-500/20 text-sky-300 border-sky-500/30';
+
+                return (
+                    '<div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1">' +
+                        '<div class="flex items-center justify-between gap-2">' +
+                            '<div class="flex items-center gap-1.5">' +
+                                '<span class="px-2 py-0.5 rounded text-[10px] font-bold border ' + badgeClass + '">' + escapeHTML(log.tech) + '</span>' +
+                                '<span class="font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">#' + escapeHTML(log.tagId || '--') + '</span>' +
+                            '</div>' +
+                            '<span class="font-mono text-[10px] text-slate-500">' + escapeHTML(log.timestamp) + '</span>' +
+                        '</div>' +
+                        '<div class="font-semibold text-slate-200">' +
+                            escapeHTML(log.action) + ': <span class="text-white">' + escapeHTML(log.partName) + '</span> ' +
+                            '<span class="font-mono text-sky-400">(Qty: ' + log.qty + ')</span>' +
+                        '</div>' +
+                        (log.note ? '<p class="text-[11px] text-slate-400 italic">"' + escapeHTML(log.note) + '"</p>' : '') +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        // ============================================================================
+        // UI LIST RENDERING, STATS & MODALS
+        // ============================================================================
+        function openModal(id) {
+            if (id === 'modal-add') {
+                document.getElementById('new-tag').value = suggestNextTwoDigitId();
+            }
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function setCategoryFilter(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-filter-btn').forEach(function(btn) {
+                if (btn.dataset.cat === cat) {
+                    btn.className = 'cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 whitespace-nowrap';
+                } else {
+                    btn.className = 'cat-filter-btn h-6 px-2 rounded text-[11px] font-medium bg-slate-800 text-slate-400 hover:text-slate-200 whitespace-nowrap';
+                }
+            });
+            renderInventoryList();
+        }
+
+        function renderInventoryList() {
+            var listEl = document.getElementById('inventory-list');
+            var query = document.getElementById('search-input').value.toLowerCase().trim();
+
+            var filtered = boxes.filter(function(b) {
+                var matchesCat = currentCategoryFilter === 'ALL' || b.category === currentCategoryFilter;
+                var matchesQuery = !query ||
+                    (b.tagId && b.tagId.toLowerCase().indexOf(query) !== -1) ||
+                    (b.partName && b.partName.toLowerCase().indexOf(query) !== -1) ||
+                    (b.partDescription && b.partDescription.toLowerCase().indexOf(query) !== -1);
+                return matchesCat && matchesQuery;
+            });
+
+            // Sort by 2-digit identifier naturally
+            filtered.sort(function(a, b) {
+                return String(a.tagId).localeCompare(String(b.tagId));
+            });
+
+            document.getElementById('tab-inv-count').textContent = boxes.length;
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<div class="text-center py-8 px-4 border border-dashed border-slate-800 rounded-xl"><p class="text-xs text-slate-400">No inventory boxes match your filter.</p></div>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(function(box) {
+                var isSelected = box.id === selectedBoxId;
+                var borderClass = isSelected
+                    ? 'border-sky-500 bg-slate-800/80'
+                    : 'border-slate-800 bg-slate-950/70 hover:border-slate-700 hover:bg-slate-900';
+
+                return (
+                    '<div onclick="selectBox(\'' + box.id + '\', true)" class="cursor-pointer border ' + borderClass + ' rounded-xl p-2.5 transition flex items-start justify-between gap-2.5">' +
+                        '<div class="flex items-start gap-2.5 min-w-0">' +
+                            '<div class="flex flex-col items-center shrink-0">' +
+                                '<span class="font-mono font-extrabold text-xs px-2 py-1 rounded-md bg-amber-500 text-slate-950 shadow">#' + escapeHTML(box.tagId) + '</span>' +
+                                '<span class="w-full h-1 rounded-full mt-1" style="background-color: ' + box.color + '"></span>' +
+                            '</div>' +
+                            '<div class="min-w-0">' +
+                                '<div class="font-bold text-xs text-white truncate">' + escapeHTML(box.partName) + '</div>' +
+                                '<p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">' + escapeHTML(box.partDescription || 'No description') + '</p>' +
+                                '<div class="flex items-center gap-1.5 mt-1 text-[10px] font-mono text-slate-500">' +
+                                    '<span>' + box.w + '×' + box.d + '×' + box.h + '"</span>' +
+                                    '<span>•</span>' +
+                                    '<span>X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"</span>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="flex flex-col items-end shrink-0">' +
+                            '<span class="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700">Qty: ' + box.qty + '</span>' +
+                            '<span class="text-[10px] text-slate-500 mt-1">' + escapeHTML(box.category) + '</span>' +
+                        '</div>' +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        function updateStats() {
+            var totalBoxes = boxes.length;
+            var totalCubicInches = 0;
+            var thirdPartyBoxes = 0;
+
+            boxes.forEach(function(b) {
+                totalCubicInches += (b.w * b.d * b.h);
+                if (b.category === 'Third-Party Pickup') thirdPartyBoxes++;
+            });
+
+            var cubicFeet = totalCubicInches / 1728;
+            var percentUsed = ((cubicFeet / 1000) * 100).toFixed(1);
+
+            document.getElementById('stat-boxes').textContent = totalBoxes;
+            document.getElementById('stat-volume').textContent = cubicFeet.toFixed(1) + ' / 1,000 ft³';
+            document.getElementById('stat-percent').textContent = percentUsed + '%';
+
+            var status3p = document.getElementById('stat-3p-text');
+            status3p.textContent = thirdPartyBoxes > 0 ? thirdPartyBoxes + ' Staged' : 'None Staged';
+        }
+
+        // ============================================================================
+        // JSON BACKUP EXPORT & DEMO RESET
+        // ============================================================================
+        function exportData() {
+            var payload = {
+                exportedAt: new Date().toISOString(),
+                lockerUnitId: LOCKER_UNIT_ID,
+                lockerDimensionsInches: { w: 120, d: 120, h: 120 },
+                boxes: boxes,
+                activityLogs: activityLogs
+            };
+            var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'lockergrid-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Exported JSON locker backup', 'success');
+        }
+
+        function confirmResetDemo() {
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+        }
+
+        function executeResetDemo() {
+            boxes = JSON.parse(JSON.stringify(DEFAULT_BOXES));
+            activityLogs = JSON.parse(JSON.stringify(DEFAULT_LOGS));
+            deselectBox();
+            saveLocalFallback();
+            if (isSupabaseConnected) {
+                pushLocalToSupabase(true);
+            }
+            syncBoxesTo3D();
+            renderInventoryList();
+            renderActivityLogs();
+            updateStats();
+            closeConfirmModal();
+            showToast('Reset to sample technician inventory', 'info');
+        }
+
+        // ============================================================================
+        // TOAST NOTIFICATIONS & UTILITIES
+        // ============================================================================
+        var toastTimeout;
+        function showToast(msg, type) {
+            var banner = document.getElementById('toast-banner');
+            var msgEl = document.getElementById('toast-msg');
+            msgEl.textContent = msg;
+
+            var styles = {
+                success: 'bg-emerald-950/90 border-emerald-700/70 text-emerald-200',
+                warning: 'bg-amber-950/90 border-amber-700/70 text-amber-200',
+                error: 'bg-rose-950/90 border-rose-700/70 text-rose-200',
+                info: 'bg-sky-950/90 border-sky-700/70 text-sky-200'
+            };
+
+            banner.className = 'mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0 ' + (styles[type] || styles.info);
+            banner.classList.remove('hidden');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(hideToast, 3500);
+        }
+
+        function hideToast() {
+            document.getElementById('toast-banner').classList.add('hidden');
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function onWindowResize() {
+            var container = document.getElementById('canvas-container');
+            if (!container || !renderer || !camera) return;
+            var width = container.clientWidth;
+            var height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
