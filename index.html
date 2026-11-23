@@ -222,7 +222,7 @@
                 <div class="grid grid-cols-12 gap-2.5">
                     <div class="col-span-4">
                         <label class="block text-[11px] font-semibold text-amber-400 mb-1">2-Digit ID *</label>
-                        <input type="text" id="new-tag" maxlength="2" required placeholder="01" class="w-full bg-slate-950 border border-amber-500/50 focus:border-amber-400 rounded-lg px-2.5 py-2 text-sm font-mono font-bold uppercase text-center text-amber-300 outline-none">
+                        <input type="text" id="new-tag" maxlength="8" required placeholder="01" class="w-full bg-slate-950 border border-amber-500/50 focus:border-amber-400 rounded-lg px-2.5 py-2 text-sm font-mono font-bold uppercase text-center text-amber-300 outline-none">
                     </div>
                     <div class="col-span-8">
                         <label class="block text-[11px] font-medium text-slate-300 mb-1">PartName *</label>
@@ -324,7 +324,7 @@
                     <div class="grid grid-cols-12 gap-2">
                         <div class="col-span-3">
                             <label class="block text-[10px] uppercase text-amber-400 font-semibold mb-0.5">2-Digit ID</label>
-                            <input type="text" id="insp-edit-tag" maxlength="2" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-mono font-bold uppercase text-center text-amber-300">
+                            <input type="text" id="insp-edit-tag" maxlength="8" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-mono font-bold uppercase text-center text-amber-300">
                         </div>
                         <div class="col-span-9">
                             <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-0.5">PartName</label>
@@ -695,7 +695,7 @@ $$;</pre>
         function mapBoxToRow(box) {
             return {
                 id: box.id,
-                tag_id: String(box.tagId || '00').slice(0, 2),
+                tag_id: String(box.tagId || '00').slice(0, 8),
                 part_name: box.partName || 'Equipment Item',
                 part_description: box.partDescription || '',
                 width_in: Number(box.w) || 18,
@@ -712,7 +712,7 @@ $$;</pre>
         function mapRowToBox(row) {
             return {
                 id: row.id,
-                tagId: String(row.tag_id || '00').slice(0, 2),
+                tagId: String(row.tag_id || '00').slice(0, 8),
                 partName: row.part_name || 'Equipment Item',
                 partDescription: row.part_description || '',
                 w: Number(row.width_in) || 18,
@@ -1579,7 +1579,7 @@ $$;</pre>
         function handleAddBox(event) {
             event.preventDefault();
 
-            var tagId = document.getElementById('new-tag').value.trim().toUpperCase().slice(0, 2) || '00';
+            var tagId = document.getElementById('new-tag').value.trim().toUpperCase().slice(0, 8) || '00';
             var partName = document.getElementById('new-name').value.trim();
             var partDescription = document.getElementById('new-desc').value.trim();
             var color = document.getElementById('new-color').value || '#38bdf8';
@@ -1709,7 +1709,7 @@ $$;</pre>
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            box.tagId = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 2) || '00';
+            box.tagId = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 8) || '00';
             box.partName = document.getElementById('insp-edit-name').value.trim() || box.partName;
             box.partDescription = document.getElementById('insp-edit-desc').value.trim();
 
