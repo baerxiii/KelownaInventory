@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LockerGrid 3D — Field Tech Inventory & Spatial Manager</title>
+    <title>LockerGrid 3D — KelownaInventory</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter & JetBrains Mono -->
@@ -24,17 +24,10 @@
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
                         mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        slate: {
-                            850: '#151e2e',
-                            900: '#0f172a',
-                            950: '#090d16',
-                        }
                     }
                 }
             }
-        }
+        };
     </script>
     <style>
         ::-webkit-scrollbar {
@@ -91,14 +84,13 @@
 
     <!-- Top Telemetry & Compact Action Bar -->
     <header class="bg-slate-900 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-20 shrink-0">
-        <!-- Brand & Locker ID -->
         <div class="flex items-center gap-2.5">
             <div class="bg-sky-500/10 border border-sky-500/30 p-1.5 rounded-lg text-sky-400">
                 <i data-lucide="box" class="w-4 h-4"></i>
             </div>
             <div>
                 <div class="flex items-center gap-2">
-                    <h1 class="font-bold text-sm tracking-tight text-white">LOCKERGRID <span class="text-sky-400 font-mono text-[11px] px-1.5 py-0.2 bg-sky-500/10 rounded border border-sky-500/20">10'×10'×10'</span></h1>
+                    <h1 class="font-bold text-sm tracking-tight text-white">LOCKERGRID <span class="text-sky-400 font-mono text-[11px] px-1.5 py-0.5 bg-sky-500/10 rounded border border-sky-500/20">10'×10'×10'</span></h1>
                     <span id="sync-badge" onclick="openModal('modal-supabase')" class="cursor-pointer inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-500 transition" title="Configure Supabase Cloud Sync">
                         <span id="sync-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                         <span id="sync-label">Supabase Disconnected</span>
@@ -108,7 +100,6 @@
             </div>
         </div>
 
-        <!-- Live Space & Activity Metrics -->
         <div class="flex items-center gap-3 md:gap-5 bg-slate-950/60 border border-slate-800/80 px-3 py-1 rounded-xl">
             <div class="flex flex-col">
                 <span class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Boxes</span>
@@ -124,7 +115,6 @@
             </div>
         </div>
 
-        <!-- Uniform Compact Action Buttons -->
         <div class="flex items-center gap-1.5">
             <button onclick="openModal('modal-add')" class="h-8 px-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow transition">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -147,15 +137,13 @@
         </div>
     </header>
 
-    <!-- Main Workspace: 3D Viewport + Compact Inventory Drawer -->
+    <!-- Main Workspace: 3D Viewport + Inventory Drawer -->
     <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-
-        <!-- Left / Top: 3D Interactive Locker Viewport -->
         <main class="relative flex-1 bg-slate-950 min-h-[50vh] lg:min-h-0 flex flex-col">
             <div id="canvas-container" class="flex-1"></div>
 
-            <!-- Hover Tooltip (Floating) -->
-            <div id="hover-tooltip" class="pointer-events-none fixed z-50 hidden bg-slate-900/95 backdrop-blur-md border border-slate-700 shadow-2xl rounded-xl p-3 text-xs w-64 transition-opacity duration-75">
+            <!-- Hover Tooltip -->
+            <div id="hover-tooltip" class="pointer-events-none fixed z-50 hidden bg-slate-900/95 backdrop-blur-md border border-slate-700 shadow-2xl rounded-xl p-3 text-xs w-64">
                 <div class="flex items-center justify-between gap-2 mb-1">
                     <span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-amber-500 text-slate-950">ID #<span id="tt-tag">01</span></span>
                     <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300">Locker Stock</span>
@@ -169,7 +157,7 @@
                 </div>
             </div>
 
-            <!-- Top-Left Camera & View Controls Overlay -->
+            <!-- Top-Left Camera Controls -->
             <div class="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 z-10">
                 <div class="bg-slate-900/90 backdrop-blur border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-lg">
                     <button onclick="setCameraView('iso')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition" data-view="iso">Isometric</button>
@@ -179,7 +167,7 @@
                 </div>
             </div>
 
-            <!-- Bottom-Left Legend / Orientation Helper -->
+            <!-- Bottom-Left Legend -->
             <div class="absolute bottom-3 left-3 pointer-events-none hidden sm:flex items-center gap-3 bg-slate-900/85 backdrop-blur border border-slate-800/90 px-3 py-1.5 rounded-xl text-[11px] text-slate-300">
                 <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Front Roll-Up Door (+Z)</span>
                 <span class="text-slate-600">|</span>
@@ -187,16 +175,13 @@
             </div>
         </main>
 
-        <!-- Right Compact Sidebar: Searchable Inventory Directory -->
+        <!-- Right Sidebar: Inventory Directory -->
         <aside class="w-full lg:w-[370px] xl:w-[400px] bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-[50vh] lg:h-full shrink-0 z-10">
-
-            <!-- Toast Notification Banner -->
             <div id="toast-banner" class="hidden mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0">
                 <span id="toast-msg">Notification</span>
                 <button onclick="hideToast()" class="text-current opacity-70 hover:opacity-100"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
             </div>
 
-            <!-- Search Header -->
             <div class="p-3 border-b border-slate-800 space-y-2 shrink-0 bg-slate-900">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Locker Directory (<span id="tab-inv-count">0</span>)</span>
@@ -210,16 +195,11 @@
                 </div>
             </div>
 
-            <!-- Scrollable Inventory Cards -->
-            <div id="inventory-list" class="flex-1 overflow-y-auto p-3 space-y-2">
-                <!-- Populated dynamically via JS -->
-            </div>
+            <div id="inventory-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
         </aside>
     </div>
 
-    <!-- ======================================================================== -->
-    <!-- MODAL 1: ADD NEW BOX TO LOCKER                                           -->
-    <!-- ======================================================================== -->
+    <!-- MODAL 1: ADD NEW BOX -->
     <div id="modal-add" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
@@ -323,9 +303,7 @@
         </div>
     </div>
 
-    <!-- ======================================================================== -->
-    <!-- MODAL 2: SELECTED BOX INSPECTOR & 3RD-PARTY ACCESS LOGGING               -->
-    <!-- ======================================================================== -->
+    <!-- MODAL 2: SELECTED BOX INSPECTOR -->
     <div id="modal-inspector" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-[2px] flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
@@ -333,7 +311,7 @@
                     <span id="insp-tag-badge" class="font-mono font-bold text-sm px-2.5 py-0.5 rounded-md bg-amber-500 text-slate-950 shrink-0">#01</span>
                     <div class="min-w-0">
                         <h3 id="insp-name" class="font-bold text-sm text-white truncate">Part Name</h3>
-                        <span id="insp-badge" class="text-[10px] font-semibold uppercase tracking-wider text-sky-400">Locker Storage</span>
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-sky-400">Locker Storage • 1 Item</span>
                     </div>
                 </div>
                 <button onclick="deselectBox()" class="p-1.5 text-slate-400 hover:text-white bg-slate-900 rounded-lg border border-slate-800">
@@ -357,9 +335,135 @@
                         <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-0.5">Part Description</label>
                         <textarea id="insp-edit-desc" rows="2" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 resize-none"></textarea>
                     </div>
-                    <pre id="supabase-sql-code" class="bg-slate-950 border border-slate-800/90 rounded-lg p-3 font-mono text-[11px] text-emerald-200 overflow-x-auto leading-relaxed">-- 1. Create KelownaInventory table (1 box = 1 equipment item, general locker storage)
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                        <span>Dimensions: <strong id="insp-dims-label" class="font-mono text-slate-200">0"W × 0"D × 0"H</strong></span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="rotateSelectedBox()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-[10px] font-semibold">Rotate 90°</button>
+                            <button type="button" onclick="autoStackSelectedBox()" class="px-2 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 rounded border border-sky-500/30 text-[10px] font-semibold">Auto-Place</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Position in 120" Locker</div>
+                    <div>
+                        <div class="flex justify-between text-[11px] font-mono mb-0.5">
+                            <span class="text-slate-400">Pos X (Left → Right)</span>
+                            <span id="insp-x-val" class="text-white">0"</span>
+                        </div>
+                        <input type="range" id="insp-x" min="0" max="100" oninput="moveSelectedBox('x', this.value)" onchange="commitBoxMove()">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] font-mono mb-0.5">
+                            <span class="text-slate-400">Pos Z (Back → Door)</span>
+                            <span id="insp-z-val" class="text-white">0"</span>
+                        </div>
+                        <input type="range" id="insp-z" min="0" max="100" oninput="moveSelectedBox('z', this.value)" onchange="commitBoxMove()">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] font-mono mb-0.5">
+                            <span class="text-slate-400">Pos Y (Floor → Ceiling)</span>
+                            <span id="insp-y-val" class="text-white">0"</span>
+                        </div>
+                        <input type="range" id="insp-y" min="0" max="100" oninput="moveSelectedBox('y', this.value)" onchange="commitBoxMove()">
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                    <div class="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">Log Technician / 3rd-Party Action</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="log-tech-select" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                            <option value="Self (Lead Tech)">Self (Lead Tech)</option>
+                            <option value="3rd-Party Tech">3rd-Party Tech</option>
+                        </select>
+                        <select id="log-action-select" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                            <option value="Checked Out / Pulled">Checked Out / Pulled</option>
+                            <option value="Moved / Restacked">Moved / Restacked</option>
+                            <option value="Removed from Locker">Removed from Locker</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="log-note-input" placeholder="Work order or note..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
+                        <button type="button" onclick="submitBoxActivityLog()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition">Log</button>
+                    </div>
+                </div>
+
+                <button type="button" onclick="deleteSelectedBox()" class="w-full py-2 bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 border border-rose-800/60 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    <span>Remove Box from Locker</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: TECHNICIAN ACTIVITY LOG -->
+    <div id="modal-logs" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="clipboard-list" class="w-4 h-4 text-amber-400"></i>
+                    <h2 class="text-sm font-bold text-white">Technician & 3rd-Party Activity Log</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearLogs()" class="text-[11px] text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-950/40">Clear</button>
+                    <button onclick="closeModal('modal-logs')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="activity-log-list" class="p-4 overflow-y-auto space-y-2 flex-1"></div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: SUPABASE REALTIME SYNC & SQL -->
+    <div id="modal-supabase" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="database" class="w-4 h-4 text-emerald-400"></i>
+                    <h2 class="text-sm font-bold text-white">Supabase Multi-Device Sync & KelownaInventory SQL</h2>
+                </div>
+                <button onclick="closeModal('modal-supabase')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="p-4 overflow-y-auto space-y-4 text-xs">
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-white">1. Connect Your Supabase Project</span>
+                        <span id="modal-sync-status" class="font-mono text-[11px] text-amber-400">Supabase Disconnected</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Project URL</label>
+                            <input type="text" id="sb-url-input" placeholder="https://xyzcompany.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Publishable / Anon Key</label>
+                            <input type="password" id="sb-key-input" placeholder="sb_publishable_..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <div class="flex items-center gap-2">
+                            <button onclick="saveAndConnectSupabase()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition">Connect & Sync</button>
+                            <button onclick="disconnectSupabase()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition">Disconnect</button>
+                        </div>
+                        <button onclick="pushSampleToSupabase()" class="px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 rounded-lg font-medium transition">Seed Sample Boxes to Cloud</button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-white">2. Run This SQL in Supabase SQL Editor</span>
+                        <button onclick="copySqlSchema()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 rounded-lg font-medium flex items-center gap-1.5 transition">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span id="copy-sql-text">Copy SQL Script</span>
+                        </button>
+                    </div>
+                    <pre id="supabase-sql-code" class="bg-slate-950 border border-slate-800/90 rounded-lg p-3 font-mono text-[11px] text-emerald-200 overflow-x-auto leading-relaxed">-- 1. Create KelownaInventory table (1 box = 1 equipment item)
 CREATE TABLE IF NOT EXISTS public."KelownaInventory" (
-  id text PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tag_id varchar(2) NOT NULL,
   part_name text NOT NULL,
   part_description text DEFAULT '',
@@ -375,7 +479,7 @@ CREATE TABLE IF NOT EXISTS public."KelownaInventory" (
 
 -- 2. Create KelownaInventoryLogs table for technician & 3rd-party tracking
 CREATE TABLE IF NOT EXISTS public."KelownaInventoryLogs" (
-  id text PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   timestamp_label text NOT NULL,
   tech_name text NOT NULL,
   action_type text NOT NULL,
@@ -385,7 +489,7 @@ CREATE TABLE IF NOT EXISTS public."KelownaInventoryLogs" (
   created_at timestamptz DEFAULT now()
 );
 
--- 3. Enable Row Level Security & open access policy for multi-device sync
+-- 3. Enable Row Level Security & open access policy
 ALTER TABLE public."KelownaInventory" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."KelownaInventoryLogs" ENABLE ROW LEVEL SECURITY;
 
@@ -424,136 +528,16 @@ $$;</pre>
         </div>
     </div>
 
-    <!-- ======================================================================== -->
-    <!-- MODAL 3: TECHNICIAN ACTIVITY LOG                                       -->
-    <!-- ======================================================================== -->
-    <div id="modal-logs" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="clipboard-list" class="w-4 h-4 text-amber-400"></i>
-                    <h2 class="text-sm font-bold text-white">Technician & 3rd-Party Activity Log</h2>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="clearLogs()" class="text-[11px] text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-950/40">Clear</button>
-                    <button onclick="closeModal('modal-logs')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-            <div id="activity-log-list" class="p-4 overflow-y-auto space-y-2 flex-1"></div>
-        </div>
-    </div>
-
-    <!-- ======================================================================== -->
-    <!-- MODAL 4: SUPABASE REALTIME SYNC & POSTGRESQL SQL SCHEMA                -->
-    <!-- ======================================================================== -->
-    <div id="modal-supabase" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="database" class="w-4 h-4 text-emerald-400"></i>
-                    <h2 class="text-sm font-bold text-white">Supabase Multi-Device Sync & KelownaInventory SQL</h2>
-                </div>
-                <button onclick="closeModal('modal-supabase')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-
-            <div class="p-4 overflow-y-auto space-y-4 text-xs">
-                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="font-bold text-white">1. Connect Your Supabase Project</span>
-                        <span id="modal-sync-status" class="font-mono text-[11px] text-amber-400">Supabase Disconnected</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Project URL</label>
-                            <input type="text" id="sb-url-input" placeholder="https://xyzcompany.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Anon (Public) Key</label>
-                            <input type="password" id="sb-key-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
-                        <div class="flex items-center gap-2">
-                            <button onclick="saveAndConnectSupabase()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition">Connect & Sync</button>
-                            <button onclick="disconnectSupabase()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition">Disconnect</button>
-                        </div>
-                        <button onclick="pushSampleToSupabase()" class="px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 rounded-lg font-medium transition">Seed Sample Boxes to Cloud</button>
-                    </div>
-                </div>
-
-                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="font-bold text-white">2. Run This SQL in Supabase SQL Editor</span>
-                        <button onclick="copySqlSchema()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 rounded-lg font-medium flex items-center gap-1.5 transition">
-                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-                            <span id="copy-sql-text">Copy SQL Script</span>
-                        </button>
-                    </div>
-                    <pre id="supabase-sql-code" class="bg-slate-950 border border-slate-800/90 rounded-lg p-3 font-mono text-[11px] text-emerald-200 overflow-x-auto leading-relaxed">-- 1. Create KelownaInventory table (1 box = 1 equipment item)
-CREATE TABLE IF NOT EXISTS public."KelownaInventory" (
-  id text PRIMARY KEY,
-  tag_id varchar(2) NOT NULL,
-  part_name text NOT NULL,
-  part_description text DEFAULT '',
-  width_in numeric NOT NULL DEFAULT 18,
-  height_in numeric NOT NULL DEFAULT 12,
-  depth_in numeric NOT NULL DEFAULT 18,
-  pos_x numeric NOT NULL DEFAULT 0,
-  pos_y numeric NOT NULL DEFAULT 0,
-  pos_z numeric NOT NULL DEFAULT 0,
-  color text DEFAULT '#38bdf8',
-  updated_at timestamptz DEFAULT now()
-);
-
--- 2. Create KelownaInventoryLogs table for technician & 3rd-party tracking
-CREATE TABLE IF NOT EXISTS public."KelownaInventoryLogs" (
-  id text PRIMARY KEY,
-  timestamp_label text NOT NULL,
-  tech_name text NOT NULL,
-  action_type text NOT NULL,
-  tag_id varchar(2) DEFAULT '--',
-  part_name text NOT NULL,
-  note text DEFAULT '',
-  created_at timestamptz DEFAULT now()
-);
-
--- 3. Enable Row Level Security & open access policy
-ALTER TABLE public."KelownaInventory" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."KelownaInventoryLogs" ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow full access to KelownaInventory" ON public."KelownaInventory";
-CREATE POLICY "Allow full access to KelownaInventory"
-ON public."KelownaInventory" FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Allow full access to KelownaInventoryLogs" ON public."KelownaInventoryLogs";
-CREATE POLICY "Allow full access to KelownaInventoryLogs"
-ON public."KelownaInventoryLogs" FOR ALL USING (true) WITH CHECK (true);
-
--- 4. Enable Realtime replication for live multi-device updates
-ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventory";
-ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pre>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Custom Confirmation Modal -->
+    <!-- CONFIRM RESET MODAL -->
     <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-            <div class="flex items-center gap-3 text-amber-400">
-                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
-                <h3 class="font-bold text-base text-white">Reset Locker Layout?</h3>
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <div class="space-y-1">
+                <h3 class="text-sm font-bold text-white">Reset Locker to Sample Layout?</h3>
+                <p class="text-xs text-slate-400">This replaces current boxes in the 3D locker with the 4 sample equipment boxes.</p>
             </div>
-            <p class="text-xs text-slate-300 leading-relaxed">
-                This will reset the locker in Supabase to the sample field technician layout.
-            </p>
-            <div class="flex justify-end gap-2 pt-2">
-                <button onclick="closeConfirmModal()" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200">Cancel</button>
-                <button onclick="executeResetDemo()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white">Reset to Sample</button>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeConfirmModal()" class="h-8 px-3 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300">Cancel</button>
+                <button onclick="executeResetDemo()" class="h-8 px-3.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white">Reset Layout</button>
             </div>
         </div>
     </div>
@@ -576,6 +560,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
         var isSupabaseConnected = false;
         var activeSupabaseUrl = '';
         var activeSupabaseKey = '';
+        var toastTimer = null;
 
         var scene, camera, renderer, controls;
         var lockerGroup, boxesGroup;
@@ -592,7 +577,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
 
         var DEFAULT_BOXES = [
             {
-                id: 'box-01',
+                id: '11111111-1111-4111-8111-111111111101',
                 tagId: '01',
                 partName: 'Honeywell Zone Valves',
                 partDescription: '3/4" sweat zone valves with end switch for boiler loop',
@@ -601,7 +586,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 color: '#38bdf8'
             },
             {
-                id: 'box-02',
+                id: '11111111-1111-4111-8111-111111111102',
                 tagId: '02',
                 partName: '24V Control Transformers',
                 partDescription: '40VA foot-mount HVAC step-down transformers',
@@ -610,7 +595,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 color: '#f59e0b'
             },
             {
-                id: 'box-03',
+                id: '11111111-1111-4111-8111-111111111103',
                 tagId: '03',
                 partName: 'Belimo Damper Actuators',
                 partDescription: 'Spring-return 24V AC/DC actuator assemblies',
@@ -619,7 +604,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 color: '#10b981'
             },
             {
-                id: 'box-04',
+                id: '11111111-1111-4111-8111-111111111104',
                 tagId: '04',
                 partName: 'Commercial Thermostats',
                 partDescription: 'BACnet MS/TP programmable wall sensors',
@@ -629,44 +614,60 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             }
         ];
 
-        function showToast(msg, type) {
-            if (!type) type = 'info';
-            var banner = document.getElementById('toast-banner');
-            var text = document.getElementById('toast-msg');
-            text.textContent = msg;
-            banner.className = 'mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0 ';
-            if (type === 'error') {
-                banner.className += 'bg-rose-950/90 border-rose-700 text-rose-200';
-            } else if (type === 'warning') {
-                banner.className += 'bg-amber-950/90 border-amber-700 text-amber-200';
-            } else if (type === 'success') {
-                banner.className += 'bg-emerald-950/90 border-emerald-700 text-emerald-200';
-            } else {
-                banner.className += 'bg-sky-950/90 border-sky-700 text-sky-200';
+        function generateUuid() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
             }
-            banner.classList.remove('hidden');
-            clearTimeout(window._toastTimer);
-            window._toastTimer = setTimeout(hideToast, 4000);
-        }
-
-        function hideToast() {
-            document.getElementById('toast-banner').classList.add('hidden');
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0;
+                var v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
         }
 
         function openModal(id) {
-            document.getElementById(id).classList.remove('hidden');
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('hidden');
             if (id === 'modal-logs') {
                 renderActivityLogs();
             } else if (id === 'modal-supabase') {
-                document.getElementById('sb-url-input').value = activeSupabaseUrl || '';
-                document.getElementById('sb-key-input').value = activeSupabaseKey || '';
+                document.getElementById('sb-url-input').value = activeSupabaseUrl || SUPABASE_URL;
+                document.getElementById('sb-key-input').value = activeSupabaseKey || SUPABASE_ANON_KEY;
                 updateSyncBadgeUI();
             }
             if (window.lucide) lucide.createIcons();
         }
 
         function closeModal(id) {
-            document.getElementById(id).classList.add('hidden');
+            var el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        }
+
+        function showToast(msg, type) {
+            var banner = document.getElementById('toast-banner');
+            var textEl = document.getElementById('toast-msg');
+            if (!banner || !textEl) return;
+
+            textEl.textContent = msg;
+            var styles = {
+                success: 'bg-emerald-950/90 text-emerald-200 border-emerald-700/70',
+                error: 'bg-rose-950/90 text-rose-200 border-rose-700/70',
+                warning: 'bg-amber-950/90 text-amber-200 border-amber-700/70',
+                info: 'bg-sky-950/90 text-sky-200 border-sky-700/70'
+            };
+            banner.className = 'mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0 ' + (styles[type] || styles.info);
+            banner.classList.remove('hidden');
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(function() {
+                hideToast();
+            }, 4500);
+        }
+
+        function hideToast() {
+            var banner = document.getElementById('toast-banner');
+            if (banner) banner.classList.add('hidden');
         }
 
         function updateSyncBadgeUI() {
@@ -675,15 +676,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var modalStatus = document.getElementById('modal-sync-status');
 
             if (isSupabaseConnected) {
-                dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
-                label.textContent = 'Supabase Live';
+                if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
+                if (label) label.textContent = 'Supabase Live';
                 if (modalStatus) {
-                    modalStatus.textContent = 'Connected & Realtime Active';
+                    modalStatus.textContent = 'Connected to ' + INVENTORY_TABLE;
                     modalStatus.className = 'font-mono text-[11px] text-emerald-400';
                 }
             } else {
-                dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
-                label.textContent = 'Supabase Disconnected';
+                if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+                if (label) label.textContent = 'Supabase Disconnected';
                 if (modalStatus) {
                     modalStatus.textContent = 'Supabase Disconnected';
                     modalStatus.className = 'font-mono text-[11px] text-amber-400';
@@ -691,65 +692,28 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             }
         }
 
-        function saveAndConnectSupabase() {
-            var url = document.getElementById('sb-url-input').value.trim();
-            var key = document.getElementById('sb-key-input').value.trim();
-            if (!url || !key) {
-                showToast('Enter both Supabase Project URL and Anon Key.', 'warning');
-                return;
-            }
-            connectSupabaseClient(url, key, true);
-        }
-
-        function disconnectSupabase() {
-            if (realtimeChannel && supabaseClient) {
-                supabaseClient.removeChannel(realtimeChannel);
-                realtimeChannel = null;
-            }
-            supabaseClient = null;
-            isSupabaseConnected = false;
-            activeSupabaseUrl = '';
-            activeSupabaseKey = '';
-            boxes = [];
-            activityLogs = [];
-            deselectBox();
-            syncBoxesTo3D();
-            renderInventoryList();
-            updateStats();
-            updateSyncBadgeUI();
-            showToast('Disconnected from Supabase.', 'info');
-        }
-
-        function connectSupabaseClient(url, key, showFeedback) {
-            if (!window.supabase || !window.supabase.createClient) {
-                isSupabaseConnected = false;
-                updateSyncBadgeUI();
-                showToast('Supabase client script failed to load.', 'error');
-                return;
-            }
-            try {
-                if (realtimeChannel && supabaseClient) {
-                    supabaseClient.removeChannel(realtimeChannel);
-                    realtimeChannel = null;
-                }
-                activeSupabaseUrl = url.replace(/\/+$/, '');
-                activeSupabaseKey = key;
-                supabaseClient = window.supabase.createClient(activeSupabaseUrl, activeSupabaseKey);
-                isSupabaseConnected = false;
-                updateSyncBadgeUI();
-                pullAllFromSupabase(showFeedback, true);
-            } catch (err) {
-                isSupabaseConnected = false;
-                updateSyncBadgeUI();
-                showToast('Supabase connection error: ' + err.message, 'error');
-            }
+        function mapBoxToRow(box) {
+            return {
+                id: box.id,
+                tag_id: String(box.tagId || '00').slice(0, 2),
+                part_name: box.partName || 'Equipment Item',
+                part_description: box.partDescription || '',
+                width_in: Number(box.w) || 18,
+                height_in: Number(box.h) || 12,
+                depth_in: Number(box.d) || 18,
+                pos_x: Number(box.x) || 0,
+                pos_y: Number(box.y) || 0,
+                pos_z: Number(box.z) || 0,
+                color: box.color || '#38bdf8',
+                updated_at: new Date().toISOString()
+            };
         }
 
         function mapRowToBox(row) {
             return {
-                id: String(row.id),
-                tagId: String(row.tag_id || '00').slice(0, 2).toUpperCase(),
-                partName: row.part_name || 'Item',
+                id: row.id,
+                tagId: String(row.tag_id || '00').slice(0, 2),
+                partName: row.part_name || 'Equipment Item',
                 partDescription: row.part_description || '',
                 w: Number(row.width_in) || 18,
                 h: Number(row.height_in) || 12,
@@ -761,114 +725,156 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             };
         }
 
-        function pullAllFromSupabase(showFeedback, enableRealtimeAfter) {
-            if (!supabaseClient) return;
-
-            supabaseClient.from(INVENTORY_TABLE).select('*').then(function(res) {
-                if (res.error) {
-                    isSupabaseConnected = false;
-                    updateSyncBadgeUI();
-                    showToast('Supabase error: ' + res.error.message, 'error');
-                    return;
-                }
-                isSupabaseConnected = true;
-                updateSyncBadgeUI();
-                if (enableRealtimeAfter && !realtimeChannel) {
-                    subscribeRealtime();
-                }
-                boxes = (res.data || []).map(mapRowToBox);
-                applyGravityToAllBoxes();
-                syncBoxesTo3D();
-                renderInventoryList();
-                updateStats();
-                if (selectedBoxId) {
-                    var stillExists = boxes.some(function(b) { return b.id === selectedBoxId; });
-                    if (!stillExists) deselectBox();
-                    else refreshInspectorUI();
-                }
-                if (showFeedback) {
-                    showToast('Synced ' + boxes.length + ' boxes from Supabase.', 'success');
-                }
-            }).catch(function(err) {
-                isSupabaseConnected = false;
-                updateSyncBadgeUI();
-                showToast('Network error connecting to Supabase: ' + err.message, 'error');
-            });
-
-            supabaseClient.from(LOGS_TABLE).select('*').order('created_at', { ascending: false }).limit(100).then(function(res) {
-                if (!res.error && res.data) {
-                    activityLogs = res.data.map(function(r) {
-                        return {
-                            id: r.id,
-                            time: r.timestamp_label || '',
-                            tech: r.tech_name || 'Tech',
-                            action: r.action_type || '',
-                            tagId: r.tag_id || '--',
-                            partName: r.part_name || '',
-                            note: r.note || ''
-                        };
-                    });
-                    if (!document.getElementById('modal-logs').classList.contains('hidden')) {
-                        renderActivityLogs();
-                    }
-                }
-            }).catch(function() {});
+        function mapRowToLog(row) {
+            return {
+                id: row.id,
+                time: row.timestamp_label || '',
+                tech: row.tech_name || 'Technician',
+                action: row.action_type || 'Update',
+                tagId: row.tag_id || '--',
+                partName: row.part_name || '',
+                note: row.note || ''
+            };
         }
 
-        function mapBoxToRow(box) {
-            return {
-                id: box.id,
-                tag_id: String(box.tagId || '00').slice(0, 2).toUpperCase(),
-                part_name: box.partName,
-                part_description: box.partDescription || '',
-                width_in: box.w,
-                height_in: box.h,
-                depth_in: box.d,
-                pos_x: Math.max(0, box.x),
-                pos_y: Math.max(0, box.y),
-                pos_z: Math.max(0, box.z),
-                color: box.color || '#38bdf8',
-                updated_at: new Date().toISOString()
-            };
+        function saveAndConnectSupabase() {
+            var urlInput = document.getElementById('sb-url-input').value.trim();
+            var keyInput = document.getElementById('sb-key-input').value.trim();
+            connectSupabaseClient(urlInput, keyInput, true);
+        }
+
+        function disconnectSupabase() {
+            if (realtimeChannel && supabaseClient) {
+                try { supabaseClient.removeChannel(realtimeChannel); } catch (e) {}
+                realtimeChannel = null;
+            }
+            supabaseClient = null;
+            isSupabaseConnected = false;
+            activeSupabaseUrl = '';
+            activeSupabaseKey = '';
+            updateSyncBadgeUI();
+            showToast('Disconnected from Supabase.', 'info');
+        }
+
+        function connectSupabaseClient(url, anonKey, notifyUser) {
+            if (!url || !anonKey) {
+                if (notifyUser) showToast('Enter both Supabase Project URL and Key.', 'warning');
+                return;
+            }
+            if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+                if (notifyUser) showToast('Supabase client library failed to load.', 'error');
+                return;
+            }
+
+            if (realtimeChannel && supabaseClient) {
+                try { supabaseClient.removeChannel(realtimeChannel); } catch (e) {}
+                realtimeChannel = null;
+            }
+
+            activeSupabaseUrl = url.replace(/\/+$/, '');
+            activeSupabaseKey = anonKey;
+            supabaseClient = window.supabase.createClient(activeSupabaseUrl, activeSupabaseKey);
+
+            pullAllFromSupabase(notifyUser);
         }
 
         function subscribeRealtime() {
             if (!supabaseClient) return;
             try {
-                if (typeof WebSocket === 'undefined') {
-                    startPollingFallback();
-                    return;
-                }
                 realtimeChannel = supabaseClient
-                    .channel('kelowna-inventory-live')
+                    .channel('kelowna-locker-sync')
                     .on('postgres_changes', { event: '*', schema: 'public', table: INVENTORY_TABLE }, function() {
-                        if (!isDraggingBox) {
-                            pullAllFromSupabase(false);
-                        }
+                        pullInventoryOnly();
                     })
                     .on('postgres_changes', { event: '*', schema: 'public', table: LOGS_TABLE }, function() {
-                        pullAllFromSupabase(false);
+                        pullLogsOnly();
                     })
                     .subscribe(function(status) {
-                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                            startPollingFallback();
+                        if (status === 'SUBSCRIBED') {
+                            isSupabaseConnected = true;
+                            updateSyncBadgeUI();
                         }
                     });
             } catch (err) {
-                startPollingFallback();
+                console.warn('Realtime subscription fallback:', err.message);
             }
         }
 
-        function startPollingFallback() {
-            if (window._supabasePollTimer) return;
-            window._supabasePollTimer = setInterval(function() {
-                if (supabaseClient && isSupabaseConnected && !isDraggingBox) {
-                    pullAllFromSupabase(false);
-                }
-            }, 6000);
+        function pullInventoryOnly() {
+            if (!supabaseClient) return;
+            supabaseClient
+                .from(INVENTORY_TABLE)
+                .select('*')
+                .then(function(res) {
+                    if (res.error) return;
+                    boxes = (res.data || []).map(mapRowToBox);
+                    applyGravityToAllBoxes();
+                    syncBoxesTo3D();
+                    renderInventoryList();
+                    updateStats();
+                    if (selectedBoxId) {
+                        var stillExists = boxes.some(function(b) { return b.id === selectedBoxId; });
+                        if (stillExists) refreshInspectorUI();
+                        else deselectBox();
+                    }
+                });
+        }
+
+        function pullLogsOnly() {
+            if (!supabaseClient) return;
+            supabaseClient
+                .from(LOGS_TABLE)
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(100)
+                .then(function(res) {
+                    if (res.error) return;
+                    activityLogs = (res.data || []).map(mapRowToLog);
+                    if (!document.getElementById('modal-logs').classList.contains('hidden')) {
+                        renderActivityLogs();
+                    }
+                });
+        }
+
+        function pullAllFromSupabase(notifyUser) {
+            if (!supabaseClient) return;
+
+            supabaseClient
+                .from(INVENTORY_TABLE)
+                .select('*')
+                .then(function(res) {
+                    if (res.error) {
+                        isSupabaseConnected = false;
+                        updateSyncBadgeUI();
+                        showToast('Supabase query error: ' + res.error.message, 'error');
+                        return;
+                    }
+
+                    isSupabaseConnected = true;
+                    updateSyncBadgeUI();
+
+                    boxes = (res.data || []).map(mapRowToBox);
+                    applyGravityToAllBoxes();
+                    syncBoxesTo3D();
+                    renderInventoryList();
+                    updateStats();
+
+                    pullLogsOnly();
+                    subscribeRealtime();
+
+                    if (notifyUser) {
+                        showToast('Connected & synced with ' + INVENTORY_TABLE + '.', 'success');
+                    }
+                })
+                .catch(function(err) {
+                    isSupabaseConnected = false;
+                    updateSyncBadgeUI();
+                    showToast('Supabase connection error: ' + err.message, 'error');
+                });
         }
 
         function cloudUpsertBox(box) {
+            if (!box) return;
             if (!supabaseClient || !isSupabaseConnected) {
                 showToast('Connect Supabase (Sync / SQL) so changes save to the cloud.', 'warning');
                 return;
@@ -1021,13 +1027,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var size = LOCKER_SIZE;
             var half = size / 2;
 
-            var floorGeo = new THREE.PlaneGeometry(size, size);
-            var floorMat = new THREE.MeshStandardMaterial({
-                color: 0x1e293b,
-                roughness: 0.85,
-                metalness: 0.1
-            });
-            var floor = new THREE.Mesh(floorGeo, floorMat);
+            var floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(size, size),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.1 })
+            );
             floor.rotation.x = -Math.PI / 2;
             floor.receiveShadow = true;
             lockerGroup.add(floor);
@@ -1036,24 +1039,19 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             gridHelper.position.y = 0.15;
             lockerGroup.add(gridHelper);
 
-            var outerFloorGeo = new THREE.PlaneGeometry(420, 420);
-            var outerFloorMat = new THREE.MeshStandardMaterial({
-                color: 0x090d16,
-                roughness: 0.95
-            });
-            var outerFloor = new THREE.Mesh(outerFloorGeo, outerFloorMat);
+            var outerFloor = new THREE.Mesh(
+                new THREE.PlaneGeometry(420, 420),
+                new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.95 })
+            );
             outerFloor.rotation.x = -Math.PI / 2;
             outerFloor.position.y = -0.2;
             outerFloor.receiveShadow = true;
             lockerGroup.add(outerFloor);
 
-            var doorThresholdGeo = new THREE.BoxGeometry(size, 0.5, 4);
-            var doorThresholdMat = new THREE.MeshStandardMaterial({
-                color: 0x10b981,
-                emissive: 0x059669,
-                emissiveIntensity: 0.35
-            });
-            var doorThreshold = new THREE.Mesh(doorThresholdGeo, doorThresholdMat);
+            var doorThreshold = new THREE.Mesh(
+                new THREE.BoxGeometry(size, 0.5, 4),
+                new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.35 })
+            );
             doorThreshold.position.set(0, 0.25, half + 2);
             lockerGroup.add(doorThreshold);
 
@@ -1081,8 +1079,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             lockerGroup.add(rightWall);
 
             var edgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
-            var edgesMat = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.65 });
-            var wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
+            var wireframe = new THREE.LineSegments(edgesGeo, new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.65 }));
             wireframe.position.set(0, half, 0);
             lockerGroup.add(wireframe);
 
@@ -1105,8 +1102,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
             var tex = new THREE.CanvasTexture(canvas);
-            var mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
-            var mesh = new THREE.Mesh(new THREE.PlaneGeometry(48, 6), mat);
+            var mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(48, 6),
+                new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
+            );
             mesh.position.set(x, y, z);
             mesh.rotation.y = rotY;
             lockerGroup.add(mesh);
@@ -1158,8 +1157,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
 
             var texture = new THREE.CanvasTexture(canvas);
             texture.minFilter = THREE.LinearFilter;
-            var spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-            var sprite = new THREE.Sprite(spriteMat);
+            var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
             sprite.scale.set(28, 7.2, 1);
             return sprite;
         }
@@ -1189,21 +1187,21 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 });
 
                 var mesh = new THREE.Mesh(geo, mat);
-                var cx = box.x + (box.w / 2) - half;
-                var cy = box.y + (box.h / 2);
-                var cz = box.z + (box.d / 2) - half;
-
-                mesh.position.set(cx, cy, cz);
+                mesh.position.set(
+                    box.x + (box.w / 2) - half,
+                    box.y + (box.h / 2),
+                    box.z + (box.d / 2) - half
+                );
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 mesh.userData = { boxId: box.id };
 
-                var edgeGeo = new THREE.EdgesGeometry(geo);
-                var edgeMat = new THREE.LineBasicMaterial({
-                    color: isBeingDragged && isOverlappingCollision ? 0xf43f5e : (isSelected ? 0xffffff : 0x0f172a),
-                    linewidth: 2
-                });
-                var wireframe = new THREE.LineSegments(edgeGeo, edgeMat);
+                var wireframe = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(geo),
+                    new THREE.LineBasicMaterial({
+                        color: isBeingDragged && isOverlappingCollision ? 0xf43f5e : (isSelected ? 0xffffff : 0x0f172a)
+                    })
+                );
                 mesh.add(wireframe);
 
                 var labelSprite = createBoxLabelSprite(box, isSelected);
@@ -1217,11 +1215,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
 
         function setCameraView(view) {
             document.querySelectorAll('.cam-btn').forEach(function(btn) {
-                if (btn.dataset.view === view) {
-                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition';
-                } else {
-                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
-                }
+                btn.className = btn.dataset.view === view
+                    ? 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition'
+                    : 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
             });
 
             controls.target.set(0, 35, 0);
@@ -1245,8 +1241,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
-            var targets = Object.values(boxMeshes);
-            var intersects = raycaster.intersectObjects(targets, false);
+            var intersects = raycaster.intersectObjects(Object.values(boxMeshes), false);
             return intersects.length > 0 ? intersects[0] : null;
         }
 
@@ -1295,15 +1290,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     var rawX = targetCenterX + (LOCKER_SIZE / 2) - (box.w / 2);
                     var rawZ = targetCenterZ + (LOCKER_SIZE / 2) - (box.d / 2);
 
-                    var resolved = resolveCollisionAndStack(
-                        rawX,
-                        rawZ,
-                        box.w,
-                        box.d,
-                        box.h,
-                        box.id,
-                        lastValidDragCoords
-                    );
+                    var resolved = resolveCollisionAndStack(rawX, rawZ, box.w, box.d, box.h, box.id, lastValidDragCoords);
 
                     isOverlappingCollision = resolved.collided;
                     box.x = Math.max(0, Math.min(LOCKER_SIZE - box.w, resolved.x));
@@ -1376,16 +1363,15 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                         syncBoxesTo3D();
                         renderInventoryList();
                         updateStats();
-                        if (hadCollision) {
-                            showToast('Collision avoided — Box #' + box.tagId + ' placed at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"', 'warning');
-                        } else {
-                            showToast('Box #' + box.tagId + ' positioned at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"', 'info');
-                        }
+                        showToast(
+                            hadCollision
+                                ? 'Collision avoided — Box #' + box.tagId + ' placed at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"'
+                                : 'Box #' + box.tagId + ' positioned at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"',
+                            hadCollision ? 'warning' : 'info'
+                        );
                     } else if (dist <= 5) {
                         var hit = getRaycastBoxHit(event.clientX, event.clientY);
-                        if (hit) {
-                            selectBox(hit.object.userData.boxId, false);
-                        }
+                        if (hit) selectBox(hit.object.userData.boxId, false);
                     }
                 }
             }
@@ -1408,37 +1394,21 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
         }
 
         function checkHorizontalOverlap(a, b) {
-            return (
-                a.x < b.x + b.w &&
-                a.x + a.w > b.x &&
-                a.z < b.z + b.d &&
-                a.z + a.d > b.z
-            );
+            return a.x < b.x + b.w && a.x + a.w > b.x && a.z < b.z + b.d && a.z + a.d > b.z;
         }
 
         function check3DOverlap(a, b) {
-            return (
-                a.x < b.x + b.w &&
-                a.x + a.w > b.x &&
-                a.y < b.y + b.h &&
-                a.y + a.h > b.y &&
-                a.z < b.z + b.d &&
-                a.z + a.d > b.z
-            );
+            return checkHorizontalOverlap(a, b) && a.y < b.y + b.h && a.y + a.h > b.y;
         }
 
         function isValidPlacement(candidate, ignoreBoxId) {
             if (candidate.x < 0 || candidate.y < 0 || candidate.z < 0) return false;
-            if (candidate.x + candidate.w > LOCKER_SIZE) return false;
-            if (candidate.z + candidate.d > LOCKER_SIZE) return false;
-            if (candidate.y + candidate.h > LOCKER_SIZE) return false;
+            if (candidate.x + candidate.w > LOCKER_SIZE || candidate.z + candidate.d > LOCKER_SIZE || candidate.y + candidate.h > LOCKER_SIZE) return false;
 
             for (var i = 0; i < boxes.length; i++) {
                 var other = boxes[i];
                 if (other.id === ignoreBoxId) continue;
-                if (check3DOverlap(candidate, other)) {
-                    return false;
-                }
+                if (check3DOverlap(candidate, other)) return false;
             }
             return true;
         }
@@ -1450,9 +1420,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 if (other.id === ignoreBoxId) continue;
                 if (checkHorizontalOverlap({ x: x, z: z, w: w, d: d }, other)) {
                     var topY = other.y + other.h;
-                    if (topY > maxSupportTopY) {
-                        maxSupportTopY = topY;
-                    }
+                    if (topY > maxSupportTopY) maxSupportTopY = topY;
                 }
             }
             return maxSupportTopY;
@@ -1463,16 +1431,14 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var safeZ = Math.max(0, Math.min(LOCKER_SIZE - d, Math.round(candidateZ)));
             var stackY = computeRestingElevation(safeX, safeZ, w, d, h, ignoreBoxId);
 
-            var candidate = { x: safeX, y: stackY, z: safeZ, w: w, d: d, h: h };
-            if (isValidPlacement(candidate, ignoreBoxId)) {
+            if (isValidPlacement({ x: safeX, y: stackY, z: safeZ, w: w, d: d, h: h }, ignoreBoxId)) {
                 return { x: safeX, y: stackY, z: safeZ, collided: false };
             }
 
             if (fallbackCoords) {
-                var slideX = Math.max(0, Math.min(LOCKER_SIZE - w, safeX));
                 var slideXPos = {
-                    x: slideX,
-                    y: computeRestingElevation(slideX, fallbackCoords.z, w, d, h, ignoreBoxId),
+                    x: safeX,
+                    y: computeRestingElevation(safeX, fallbackCoords.z, w, d, h, ignoreBoxId),
                     z: fallbackCoords.z,
                     w: w, d: d, h: h
                 };
@@ -1480,11 +1446,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     return { x: slideXPos.x, y: slideXPos.y, z: slideXPos.z, collided: false };
                 }
 
-                var slideZ = Math.max(0, Math.min(LOCKER_SIZE - d, safeZ));
                 var slideZPos = {
                     x: fallbackCoords.x,
-                    y: computeRestingElevation(fallbackCoords.x, slideZ, w, d, h, ignoreBoxId),
-                    z: slideZ,
+                    y: computeRestingElevation(fallbackCoords.x, safeZ, w, d, h, ignoreBoxId),
+                    z: safeZ,
                     w: w, d: d, h: h
                 };
                 if (isValidPlacement(slideZPos, ignoreBoxId)) {
@@ -1499,8 +1464,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
 
             var fbX = fallbackCoords ? Math.max(0, Math.min(LOCKER_SIZE - w, fallbackCoords.x)) : 0;
             var fbZ = fallbackCoords ? Math.max(0, Math.min(LOCKER_SIZE - d, fallbackCoords.z)) : 0;
-            var fbY = computeRestingElevation(fbX, fbZ, w, d, h, ignoreBoxId);
-            return { x: fbX, y: fbY, z: fbZ, collided: true };
+            return { x: fbX, y: computeRestingElevation(fbX, fbZ, w, d, h, ignoreBoxId), z: fbZ, collided: true };
         }
 
         function findNearestNonOverlappingSpot(targetX, targetZ, w, d, h, ignoreBoxId) {
@@ -1511,8 +1475,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             for (var gz = 0; gz <= LOCKER_SIZE - d; gz += step) {
                 for (var gx = 0; gx <= LOCKER_SIZE - w; gx += step) {
                     var gy = computeRestingElevation(gx, gz, w, d, h, ignoreBoxId);
-                    var cand = { x: gx, y: gy, z: gz, w: w, d: d, h: h };
-                    if (isValidPlacement(cand, ignoreBoxId)) {
+                    if (isValidPlacement({ x: gx, y: gy, z: gz, w: w, d: d, h: h }, ignoreBoxId)) {
                         var dist = Math.hypot(gx - targetX, gz - targetZ);
                         if (dist < bestDist) {
                             bestDist = dist;
@@ -1521,7 +1484,6 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     }
                 }
             }
-
             return bestCandidate;
         }
 
@@ -1538,28 +1500,22 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     var box = boxes[i];
                     var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
                     if (supportY < box.y) {
-                        var candidate = { x: box.x, y: supportY, z: box.z, w: box.w, d: box.d, h: box.h };
-                        if (isValidPlacement(candidate, box.id)) {
+                        if (isValidPlacement({ x: box.x, y: supportY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
                             box.y = Math.max(0, supportY);
                             changed = true;
-                            if (movedBoxes.indexOf(box) === -1) {
-                                movedBoxes.push(box);
-                            }
+                            if (movedBoxes.indexOf(box) === -1) movedBoxes.push(box);
                         }
                     }
                 }
             }
-
             return movedBoxes;
         }
 
         function findSmartPosition(w, d, h, ignoreBoxId) {
             var step = 6;
-
             for (var z = 4; z <= LOCKER_SIZE - d; z += step) {
                 for (var x = 4; x <= LOCKER_SIZE - w; x += step) {
-                    var candidate = { x: x, y: 0, z: z, w: w, d: d, h: h };
-                    if (isValidPlacement(candidate, ignoreBoxId)) {
+                    if (isValidPlacement({ x: x, y: 0, z: z, w: w, d: d, h: h }, ignoreBoxId)) {
                         return { x: x, y: 0, z: z };
                     }
                 }
@@ -1570,13 +1526,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 if (base.id === ignoreBoxId) continue;
                 var stackY = base.y + base.h;
                 if (stackY + h <= LOCKER_SIZE && base.x + w <= LOCKER_SIZE && base.z + d <= LOCKER_SIZE) {
-                    var stackCand = { x: base.x, y: stackY, z: base.z, w: w, d: d, h: h };
-                    if (isValidPlacement(stackCand, ignoreBoxId)) {
+                    if (isValidPlacement({ x: base.x, y: stackY, z: base.z, w: w, d: d, h: h }, ignoreBoxId)) {
                         return { x: base.x, y: stackY, z: base.z };
                     }
                 }
             }
-
             return { x: 0, y: 0, z: 0 };
         }
 
@@ -1609,22 +1563,17 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
         function selectColor(hex) {
             document.getElementById('new-color').value = hex;
             document.querySelectorAll('.color-swatch').forEach(function(btn) {
-                if (btn.dataset.color === hex) {
-                    btn.className = 'color-swatch w-6 h-6 rounded-full ring-2 ring-white scale-110 transition';
-                } else {
-                    btn.className = 'color-swatch w-6 h-6 rounded-full opacity-70 hover:opacity-100 transition';
-                }
+                btn.className = btn.dataset.color === hex
+                    ? 'color-swatch w-6 h-6 rounded-full ring-2 ring-white scale-110 transition'
+                    : 'color-swatch w-6 h-6 rounded-full opacity-70 hover:opacity-100 transition';
                 btn.style.backgroundColor = btn.dataset.color;
             });
         }
 
         function toggleManualCoords(isAuto) {
             var manualDiv = document.getElementById('manual-coords-fields');
-            if (isAuto) {
-                manualDiv.classList.add('hidden');
-            } else {
-                manualDiv.classList.remove('hidden');
-            }
+            if (isAuto) manualDiv.classList.add('hidden');
+            else manualDiv.classList.remove('hidden');
         }
 
         function handleAddBox(event) {
@@ -1668,7 +1617,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             }
 
             var newBox = {
-                id: 'box-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                id: generateUuid(),
                 tagId: tagId,
                 partName: partName,
                 partDescription: partDescription,
@@ -1760,16 +1709,12 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            var newTag = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 2) || '00';
-            var newName = document.getElementById('insp-edit-name').value.trim() || box.partName;
-            var newDesc = document.getElementById('insp-edit-desc').value.trim();
+            box.tagId = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 2) || '00';
+            box.partName = document.getElementById('insp-edit-name').value.trim() || box.partName;
+            box.partDescription = document.getElementById('insp-edit-desc').value.trim();
 
-            box.tagId = newTag;
-            box.partName = newName;
-            box.partDescription = newDesc;
-
-            document.getElementById('insp-tag-badge').textContent = '#' + newTag;
-            document.getElementById('insp-name').textContent = newName;
+            document.getElementById('insp-tag-badge').textContent = '#' + box.tagId;
+            document.getElementById('insp-name').textContent = box.partName;
 
             cloudUpsertBox(box);
             syncBoxesTo3D();
@@ -1801,8 +1746,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 document.getElementById('insp-y-val').textContent = box.y + '"';
             } else {
                 var minStackY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
-                var cand = { x: box.x, y: clamped, z: box.z, w: box.w, d: box.d, h: box.h };
-                if (clamped < minStackY || !isValidPlacement(cand, box.id)) {
+                if (clamped < minStackY || !isValidPlacement({ x: box.x, y: clamped, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
                     box.y = minStackY;
                 }
                 document.getElementById('insp-y').value = box.y;
@@ -1884,9 +1828,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
 
             var droppedBoxes = applyGravityToAllBoxes();
             cloudDeleteBox(removedId);
-            if (droppedBoxes.length > 0) {
-                cloudUpsertManyBoxes(droppedBoxes);
-            }
+            if (droppedBoxes.length > 0) cloudUpsertManyBoxes(droppedBoxes);
 
             recordActivity('Self (Lead Tech)', 'Removed Box from Locker', removedTag, removedName, 'Deleted from locker');
             syncBoxesTo3D();
@@ -1927,7 +1869,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                           now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             var entry = {
-                id: 'log-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+                id: generateUuid(),
                 time: timeStr,
                 tech: tech,
                 action: action,
@@ -1978,7 +1920,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             activityLogs = [];
             renderActivityLogs();
             if (supabaseClient && isSupabaseConnected) {
-                supabaseClient.from(LOGS_TABLE).delete().neq('id', '').then(function() {});
+                supabaseClient.from(LOGS_TABLE).delete().neq('id', '00000000-0000-0000-0000-000000000000').then(function() {});
             }
             showToast('Activity log cleared.', 'info');
         }
@@ -2083,7 +2025,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             updateStats();
 
             if (supabaseClient && isSupabaseConnected) {
-                supabaseClient.from(INVENTORY_TABLE).delete().neq('id', '').then(function() {
+                supabaseClient.from(INVENTORY_TABLE).delete().neq('id', '00000000-0000-0000-0000-000000000000').then(function() {
                     cloudUpsertManyBoxes(boxes);
                 });
             }
@@ -2109,12 +2051,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             updateStats();
             updateSyncBadgeUI();
 
-            if (
-                SUPABASE_URL &&
-                SUPABASE_ANON_KEY &&
-                SUPABASE_URL !== 'YOUR_SUPABASE_URL' &&
-                SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY'
-            ) {
+            if (SUPABASE_URL && SUPABASE_ANON_KEY) {
                 try {
                     connectSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, false);
                 } catch (err) {
