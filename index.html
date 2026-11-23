@@ -722,41 +722,80 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
 
         function connectSupabaseClient(url, key, showFeedback) {
             if (!window.supabase || !window.supabase.createClient) {
+                isSupabaseConnected = false;
+                updateSyncBadgeUI();
                 showToast('Supabase client script failed to load.', 'error');
                 return;
             }
             try {
                 if (realtimeChannel && supabaseClient) {
                     supabaseClient.removeChannel(realtimeChannel);
+                    realtimeChannel = null;
                 }
-                activeSupabaseUrl = url;
+                activeSupabaseUrl = url.replace(/\/+$/, '');
                 activeSupabaseKey = key;
-                supabaseClient = window.supabase.createClient(url, key);
-                isSupabaseConnected = true;
+                supabaseClient = window.supabase.createClient(activeSupabaseUrl, activeSupabaseKey);
+                isSupabaseConnected = false;
                 updateSyncBadgeUI();
-                pullAllFromSupabase(showFeedback);
-                subscribeRealtime();
+                pullAllFromSupabase(showFeedback, true);
             } catch (err) {
                 isSupabaseConnected = false;
                 updateSyncBadgeUI();
                 showToast('Supabase connection error: ' + err.message, 'error');
             }
         }
+        function pullAllFromSupabase(showFeedback, enableRealtimeAfter) {
+            if (!supabaseClient) return;
 
-        function mapRowToBox(row) {
-            return {
-                id: row.id,
-                tagId: String(row.tag_id || '00').slice(0, 2).toUpperCase(),
-                partName: row.part_name || 'Unnamed Part',
-                partDescription: row.part_description || '',
-                w: Number(row.width_in) || 18,
-                d: Number(row.depth_in) || 18,
-                h: Number(row.height_in) || 12,
-                x: Math.max(0, Number(row.pos_x) || 0),
-                y: Math.max(0, Number(row.pos_y) || 0),
-                z: Math.max(0, Number(row.pos_z) || 0),
-                color: row.color || '#38bdf8'
-            };
+            supabaseClient.from(INVENTORY_TABLE).select('*').then(function(res) {
+                if (res.error) {
+                    isSupabaseConnected = false;
+                    updateSyncBadgeUI();
+                    showToast('Supabase error: ' + res.error.message, 'error');
+                    return;
+                }
+                isSupabaseConnected = true;
+                updateSyncBadgeUI();
+                if (enableRealtimeAfter && !realtimeChannel) {
+                    subscribeRealtime();
+                }
+                boxes = (res.data || []).map(mapRowToBox);
+                applyGravityToAllBoxes();
+                syncBoxesTo3D();
+                renderInventoryList();
+                updateStats();
+                if (selectedBoxId) {
+                    var stillExists = boxes.some(function(b) { return b.id === selectedBoxId; });
+                    if (!stillExists) deselectBox();
+                    else refreshInspectorUI();
+                }
+                if (showFeedback) {
+                    showToast('Synced ' + boxes.length + ' boxes from Supabase.', 'success');
+                }
+            }).catch(function(err) {
+                isSupabaseConnected = false;
+                updateSyncBadgeUI();
+                showToast('Network error connecting to Supabase: ' + err.message, 'error');
+            });
+
+            supabaseClient.from(LOGS_TABLE).select('*').order('created_at', { ascending: false }).limit(100).then(function(res) {
+                if (!res.error && res.data) {
+                    activityLogs = res.data.map(function(r) {
+                        return {
+                            id: r.id,
+                            time: r.timestamp_label || '',
+                            tech: r.tech_name || 'Tech',
+                            action: r.action_type || '',
+                            tagId: r.tag_id || '--',
+                            partName: r.part_name || '',
+                            note: r.note || ''
+                        };
+                    });
+                    if (!document.getElementById('modal-logs').classList.contains('hidden')) {
+                        renderActivityLogs();
+                    }
+                }
+            }).catch(function() {});
         }
 
         function mapBoxToRow(box) {
@@ -2086,4 +2125,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
         });
     </script>
 </body>
-</html>
+</html>supabase
