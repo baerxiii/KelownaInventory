@@ -357,68 +357,68 @@
                         <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-0.5">Part Description</label>
                         <textarea id="insp-edit-desc" rows="2" onchange="updateSelectedMeta()" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 resize-none"></textarea>
                     </div>
-                </div>
+                    <pre id="supabase-sql-code" class="bg-slate-950 border border-slate-800/90 rounded-lg p-3 font-mono text-[11px] text-emerald-200 overflow-x-auto leading-relaxed">-- 1. Create KelownaInventory table (1 box = 1 equipment item, general locker storage)
+CREATE TABLE IF NOT EXISTS public."KelownaInventory" (
+  id text PRIMARY KEY,
+  tag_id varchar(2) NOT NULL,
+  part_name text NOT NULL,
+  part_description text DEFAULT '',
+  width_in numeric NOT NULL DEFAULT 18,
+  height_in numeric NOT NULL DEFAULT 12,
+  depth_in numeric NOT NULL DEFAULT 18,
+  pos_x numeric NOT NULL DEFAULT 0,
+  pos_y numeric NOT NULL DEFAULT 0,
+  pos_z numeric NOT NULL DEFAULT 0,
+  color text DEFAULT '#38bdf8',
+  updated_at timestamptz DEFAULT now()
+);
 
-                <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                    <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1.5">Orientation & Placement</label>
-                    <div class="flex items-center gap-2">
-                        <button onclick="rotateSelectedBox()" class="flex-1 h-8 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1.5 border border-slate-700" title="Rotate 90°">
-                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-sky-400"></i> Rotate 90°
-                        </button>
-                        <button onclick="autoStackSelectedBox()" class="flex-1 h-8 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1.5 border border-slate-700" title="Auto-Snap to Open Spot">
-                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Auto-Place
-                        </button>
-                    </div>
-                </div>
+-- 2. Create KelownaInventoryLogs table for technician & 3rd-party tracking
+CREATE TABLE IF NOT EXISTS public."KelownaInventoryLogs" (
+  id text PRIMARY KEY,
+  timestamp_label text NOT NULL,
+  tech_name text NOT NULL,
+  action_type text NOT NULL,
+  tag_id varchar(2) DEFAULT '--',
+  part_name text NOT NULL,
+  note text DEFAULT '',
+  created_at timestamptz DEFAULT now()
+);
 
-                <div class="space-y-1.5 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="font-semibold text-slate-300">3D Position (inches)</span>
-                        <span id="insp-dims-label" class="font-mono text-slate-400">24"W × 18"D × 18"H</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="w-14 font-mono text-slate-400">X (L/R):</span>
-                        <input type="range" id="insp-x" min="0" max="120" step="1" oninput="moveSelectedBox('x', this.value)" onchange="commitBoxMove()" class="flex-1">
-                        <span id="insp-x-val" class="w-9 text-right font-mono text-sky-300">0"</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="w-14 font-mono text-slate-400">Z (B/F):</span>
-                        <input type="range" id="insp-z" min="0" max="120" step="1" oninput="moveSelectedBox('z', this.value)" onchange="commitBoxMove()" class="flex-1">
-                        <span id="insp-z-val" class="w-9 text-right font-mono text-sky-300">0"</span>
-                    </div>
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="w-14 font-mono text-slate-400">Y (Hgt):</span>
-                        <input type="range" id="insp-y" min="0" max="120" step="1" oninput="moveSelectedBox('y', this.value)" onchange="commitBoxMove()" class="flex-1">
-                        <span id="insp-y-val" class="w-9 text-right font-mono text-sky-300">0"</span>
-                    </div>
-                </div>
+-- 3. Enable Row Level Security & open access policy for multi-device sync
+ALTER TABLE public."KelownaInventory" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."KelownaInventoryLogs" ENABLE ROW LEVEL SECURITY;
 
-                <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 space-y-2">
-                    <div class="text-[11px] font-semibold text-amber-400 flex items-center gap-1.5">
-                        <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-                        <span>Log 3rd-Party Pickup / Checkout</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-1.5">
-                        <select id="log-tech-select" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none">
-                            <option value="3rd-Party Tech">3rd-Party Tech</option>
-                            <option value="Self (Lead Tech)">Self (Lead Tech)</option>
-                        </select>
-                        <select id="log-action-select" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none">
-                            <option value="Picked Up & Removed Box">Picked Up Box (Remove)</option>
-                            <option value="Inspected / Verified">Verified in Locker</option>
-                        </select>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <input type="text" id="log-note-input" placeholder="Work Order # or call note..." class="flex-1 bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white placeholder-slate-500">
-                        <button onclick="submitBoxActivityLog()" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded transition">Log</button>
-                    </div>
-                </div>
+DROP POLICY IF EXISTS "Allow full access to KelownaInventory" ON public."KelownaInventory";
+CREATE POLICY "Allow full access to KelownaInventory"
+ON public."KelownaInventory" FOR ALL USING (true) WITH CHECK (true);
 
-                <div class="pt-1 flex justify-end">
-                    <button type="button" onclick="deleteSelectedBox()" class="h-8 px-3 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/70 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                        <span>Remove Box from Locker</span>
-                    </button>
+DROP POLICY IF EXISTS "Allow full access to KelownaInventoryLogs" ON public."KelownaInventoryLogs";
+CREATE POLICY "Allow full access to KelownaInventoryLogs"
+ON public."KelownaInventoryLogs" FOR ALL USING (true) WITH CHECK (true);
+
+-- 4. Safely enable Realtime replication (skips tables already in supabase_realtime)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'KelownaInventory'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventory";
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'KelownaInventoryLogs'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";
+  END IF;
+END
+$$;</pre>
                 </div>
             </div>
         </div>
@@ -469,11 +469,11 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         <div>
                             <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Project URL</label>
-                            <input type="text" id="sb-url-input" placeholder="https://uzbbwvihkfzdbnowhglc.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
+                            <input type="text" id="sb-url-input" placeholder="https://xyzcompany.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
                         </div>
                         <div>
                             <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Anon (Public) Key</label>
-                            <input type="password" id="sb-key-input" placeholder="sb_publishable_a6YEwdDOpkZ6BI8pHXVPnQ_WlFMlHmf" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
+                            <input type="password" id="sb-key-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -559,8 +559,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
     </div>
 
     <script>
-        var SUPABASE_URL = 'YOUR_SUPABASE_URL';
-        var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        var SUPABASE_URL = 'https://uzbbwvihkfzdbnowhglc.supabase.co';
+        var SUPABASE_ANON_KEY = 'sb_publishable_a6YEwdDOpkZ6BI8pHXVPnQ_WlFMlHmf';
         var INVENTORY_TABLE = 'KelownaInventory';
         var LOGS_TABLE = 'KelownaInventoryLogs';
 
@@ -744,6 +744,23 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 showToast('Supabase connection error: ' + err.message, 'error');
             }
         }
+
+        function mapRowToBox(row) {
+            return {
+                id: String(row.id),
+                tagId: String(row.tag_id || '00').slice(0, 2).toUpperCase(),
+                partName: row.part_name || 'Item',
+                partDescription: row.part_description || '',
+                w: Number(row.width_in) || 18,
+                h: Number(row.height_in) || 12,
+                d: Number(row.depth_in) || 18,
+                x: Number(row.pos_x) || 0,
+                y: Number(row.pos_y) || 0,
+                z: Number(row.pos_z) || 0,
+                color: row.color || '#38bdf8'
+            };
+        }
+
         function pullAllFromSupabase(showFeedback, enableRealtimeAfter) {
             if (!supabaseClient) return;
 
@@ -815,62 +832,40 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             };
         }
 
-        function pullAllFromSupabase(showFeedback) {
-            if (!supabaseClient) return;
-
-            supabaseClient.from(INVENTORY_TABLE).select('*').then(function(res) {
-                if (res.error) {
-                    showToast('Supabase read error: ' + res.error.message, 'error');
-                    return;
-                }
-                boxes = (res.data || []).map(mapRowToBox);
-                applyGravityToAllBoxes();
-                syncBoxesTo3D();
-                renderInventoryList();
-                updateStats();
-                if (selectedBoxId) {
-                    var stillExists = boxes.some(function(b) { return b.id === selectedBoxId; });
-                    if (!stillExists) deselectBox();
-                    else refreshInspectorUI();
-                }
-                if (showFeedback) {
-                    showToast('Synced ' + boxes.length + ' boxes from Supabase.', 'success');
-                }
-            });
-
-            supabaseClient.from(LOGS_TABLE).select('*').order('created_at', { ascending: false }).limit(100).then(function(res) {
-                if (!res.error && res.data) {
-                    activityLogs = res.data.map(function(r) {
-                        return {
-                            id: r.id,
-                            time: r.timestamp_label || '',
-                            tech: r.tech_name || 'Tech',
-                            action: r.action_type || '',
-                            tagId: r.tag_id || '--',
-                            partName: r.part_name || '',
-                            note: r.note || ''
-                        };
-                    });
-                    if (!document.getElementById('modal-logs').classList.contains('hidden')) {
-                        renderActivityLogs();
-                    }
-                }
-            });
-        }
-
         function subscribeRealtime() {
             if (!supabaseClient) return;
-            realtimeChannel = supabaseClient
-                .channel('kelowna-inventory-live')
-                .on('postgres_changes', { event: '*', schema: 'public', table: INVENTORY_TABLE }, function() {
-                    if (!isDraggingBox) {
+            try {
+                if (typeof WebSocket === 'undefined') {
+                    startPollingFallback();
+                    return;
+                }
+                realtimeChannel = supabaseClient
+                    .channel('kelowna-inventory-live')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: INVENTORY_TABLE }, function() {
+                        if (!isDraggingBox) {
+                            pullAllFromSupabase(false);
+                        }
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: LOGS_TABLE }, function() {
                         pullAllFromSupabase(false);
-                    }
-                })
-                .on('postgres_changes', { event: '*', schema: 'public', table: LOGS_TABLE }, function() {
+                    })
+                    .subscribe(function(status) {
+                        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                            startPollingFallback();
+                        }
+                    });
+            } catch (err) {
+                startPollingFallback();
+            }
+        }
+
+        function startPollingFallback() {
+            if (window._supabasePollTimer) return;
+            window._supabasePollTimer = setInterval(function() {
+                if (supabaseClient && isSupabaseConnected && !isDraggingBox) {
                     pullAllFromSupabase(false);
-                })
-                .subscribe();
+                }
+            }, 6000);
         }
 
         function cloudUpsertBox(box) {
@@ -2120,9 +2115,13 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                 SUPABASE_URL !== 'YOUR_SUPABASE_URL' &&
                 SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY'
             ) {
-                connectSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, false);
+                try {
+                    connectSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, false);
+                } catch (err) {
+                    showToast('Supabase init notice: ' + err.message, 'warning');
+                }
             }
         });
     </script>
 </body>
-</html>supabase
+</html>
