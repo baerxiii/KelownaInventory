@@ -587,710 +587,622 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
         var dragPlane = null;
         var dragOffset = new THREE.Vector3();
         var dragStartCoords = null;
+        var lastValidDragCoords = null;
+        var isOverlappingCollision = false;
 
         var DEFAULT_BOXES = [
             {
-                id: 'box-101',
+                id: 'box-01',
                 tagId: '01',
-                partName: 'Carrier OEM Control Board',
-                partDescription: 'Model HVC-8840 24V main furnace control board.',
-                w: 28, d: 22, h: 18,
-                x: 4, y: 0, z: 4,
+                partName: 'Honeywell Zone Valves',
+                partDescription: '3/4" sweat zone valves with end switch for boiler loop',
+                w: 24, d: 18, h: 16,
+                x: 8, y: 0, z: 8,
                 color: '#38bdf8'
             },
             {
-                id: 'box-102',
+                id: 'box-02',
                 tagId: '02',
-                partName: 'Honeywell Zone Damper Actuator',
-                partDescription: '24VAC spring-return damper motor assembly.',
-                w: 28, d: 22, h: 16,
-                x: 4, y: 18, z: 4,
-                color: '#0284c7'
-            },
-            {
-                id: 'box-103',
-                tagId: '03',
-                partName: 'Cat6 Plenum 1000ft Pull Box',
-                partDescription: 'Blue CMP rated solid copper Ethernet spool.',
-                w: 26, d: 24, h: 24,
-                x: 38, y: 0, z: 4,
-                color: '#10b981'
-            },
-            {
-                id: 'box-104',
-                tagId: '14',
-                partName: 'VAV Sensor & Relay Kit',
-                partDescription: 'Replacement sensor and relay assembly.',
-                w: 28, d: 22, h: 18,
-                x: 84, y: 0, z: 88,
+                partName: '24V Control Transformers',
+                partDescription: '40VA foot-mount HVAC step-down transformers',
+                w: 16, d: 14, h: 12,
+                x: 10, y: 16, z: 10,
                 color: '#f59e0b'
             },
             {
-                id: 'box-105',
-                tagId: '05',
-                partName: 'Fluke Digital Manometer Kit',
-                partDescription: 'Calibrated static pressure meter & probe hard-case.',
-                w: 24, d: 18, h: 16,
-                x: 88, y: 0, z: 8,
-                color: '#a855f7'
+                id: 'box-03',
+                tagId: '03',
+                partName: 'Belimo Damper Actuators',
+                partDescription: 'Spring-return 24V AC/DC actuator assemblies',
+                w: 20, d: 16, h: 14,
+                x: 42, y: 0, z: 12,
+                color: '#10b981'
             },
             {
-                id: 'box-106',
-                tagId: '09',
-                partName: 'RMA Defective Valve Assembly',
-                partDescription: 'Warranty return unit with pre-paid UPS label.',
-                w: 24, d: 20, h: 16,
-                x: 38, y: 24, z: 4,
-                color: '#f43f5e'
+                id: 'box-04',
+                tagId: '04',
+                partName: 'Commercial Thermostats',
+                partDescription: 'BACnet MS/TP programmable wall sensors',
+                w: 18, d: 14, h: 10,
+                x: 12, y: 0, z: 68,
+                color: '#a855f7'
             }
         ];
 
-        function initApp() {
-            try {
-                if (window.lucide) {
-                    lucide.createIcons();
-                }
-                initThreeJS();
-                syncBoxesTo3D();
-                renderInventoryList();
-                renderActivityLogs();
-                updateStats();
-                setCameraView('iso');
-                initSupabaseFromConfig();
-            } catch (err) {
-                console.error('Initialization error:', err);
-                showToast('Startup error: ' + (err.message || err), 'error');
-            }
-        }
-
-        function initSupabaseFromConfig() {
-            var url = (SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') ? SUPABASE_URL.trim() : activeSupabaseUrl;
-            var key = (SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') ? SUPABASE_ANON_KEY.trim() : activeSupabaseKey;
-
-            document.getElementById('sb-url-input').value = url || '';
-            document.getElementById('sb-key-input').value = key || '';
-
-            if (url && key) {
-                connectSupabase(url, key);
+        function showToast(msg, type) {
+            if (!type) type = 'info';
+            var banner = document.getElementById('toast-banner');
+            var text = document.getElementById('toast-msg');
+            text.textContent = msg;
+            banner.className = 'mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0 ';
+            if (type === 'error') {
+                banner.className += 'bg-rose-950/90 border-rose-700 text-rose-200';
+            } else if (type === 'warning') {
+                banner.className += 'bg-amber-950/90 border-amber-700 text-amber-200';
+            } else if (type === 'success') {
+                banner.className += 'bg-emerald-950/90 border-emerald-700 text-emerald-200';
             } else {
-                updateSyncBadge(false, 'Supabase Disconnected');
-                showToast('Connect Supabase via "Sync / SQL" to load KelownaInventory', 'warning');
+                banner.className += 'bg-sky-950/90 border-sky-700 text-sky-200';
             }
+            banner.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(hideToast, 4000);
         }
 
-        function connectSupabase(url, key) {
-            if (!window.supabase || !window.supabase.createClient) {
-                showToast('Supabase SDK not loaded. Check internet connection.', 'error');
-                return;
-            }
-
-            try {
-                if (realtimeChannel && supabaseClient) {
-                    supabaseClient.removeChannel(realtimeChannel);
-                }
-
-                activeSupabaseUrl = url;
-                activeSupabaseKey = key;
-                supabaseClient = window.supabase.createClient(url, key);
-
-                Promise.all([
-                    supabaseClient.from(INVENTORY_TABLE).select('*'),
-                    supabaseClient.from(LOGS_TABLE).select('*').order('created_at', { ascending: false }).limit(50)
-                ]).then(function(results) {
-                    var invRes = results[0];
-                    var logRes = results[1];
-
-                    if (invRes.error) {
-                        throw invRes.error;
-                    }
-
-                    isSupabaseConnected = true;
-                    updateSyncBadge(true, 'Live Cloud Sync');
-
-                    boxes = (invRes.data || []).map(mapDbRowToBox);
-                    applyGravityToAllBoxes();
-                    syncBoxesTo3D();
-                    renderInventoryList();
-                    updateStats();
-
-                    if (!logRes.error) {
-                        activityLogs = (logRes.data || []).map(mapDbRowToLog);
-                        renderActivityLogs();
-                    }
-
-                    subscribeToRealtime();
-                }).catch(function(err) {
-                    console.error('Supabase connection error:', err);
-                    isSupabaseConnected = false;
-                    updateSyncBadge(false, 'Supabase Error');
-                    showToast('Supabase error: ' + (err.message || 'Check URL/Key & KelownaInventory table'), 'error');
-                });
-            } catch (err) {
-                isSupabaseConnected = false;
-                updateSyncBadge(false, 'Supabase Error');
-            }
+        function hideToast() {
+            document.getElementById('toast-banner').classList.add('hidden');
         }
 
-        function subscribeToRealtime() {
-            if (!supabaseClient) return;
-
-            realtimeChannel = supabaseClient
-                .channel('kelowna-inventory-realtime')
-                .on('postgres_changes', { event: '*', schema: 'public', table: INVENTORY_TABLE }, function(payload) {
-                    handleRealtimeBoxChange(payload);
-                })
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: LOGS_TABLE }, function(payload) {
-                    handleRealtimeLogInsert(payload);
-                })
-                .subscribe();
-        }
-
-        function handleRealtimeBoxChange(payload) {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                var row = payload.new;
-                var updatedBox = mapDbRowToBox(row);
-                var idx = boxes.findIndex(function(b) { return b.id === updatedBox.id; });
-                if (idx >= 0) {
-                    boxes[idx] = updatedBox;
-                } else {
-                    boxes.push(updatedBox);
-                }
-            } else if (payload.eventType === 'DELETE') {
-                var oldRow = payload.old;
-                boxes = boxes.filter(function(b) { return b.id !== oldRow.id; });
-                if (selectedBoxId === oldRow.id) {
-                    deselectBox();
-                }
-                applyGravityToAllBoxes();
-            }
-
-            syncBoxesTo3D();
-            renderInventoryList();
-            updateStats();
-        }
-
-        function handleRealtimeLogInsert(payload) {
-            var row = payload.new;
-            if (!row) return;
-            var exists = activityLogs.some(function(l) { return l.id === row.id; });
-            if (!exists) {
-                activityLogs.unshift(mapDbRowToLog(row));
-                if (activityLogs.length > 50) activityLogs.pop();
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if (id === 'modal-logs') {
                 renderActivityLogs();
+            } else if (id === 'modal-supabase') {
+                document.getElementById('sb-url-input').value = activeSupabaseUrl || '';
+                document.getElementById('sb-key-input').value = activeSupabaseKey || '';
+                updateSyncBadgeUI();
             }
+            if (window.lucide) lucide.createIcons();
         }
 
-        function mapDbRowToBox(row) {
-            return {
-                id: row.id,
-                tagId: (row.tag_id || '00').toUpperCase(),
-                partName: row.part_name || 'Unnamed Part',
-                partDescription: row.part_description || '',
-                w: Number(row.width_in) || 18,
-                h: Number(row.height_in) || 12,
-                d: Number(row.depth_in) || 18,
-                x: Number(row.pos_x) || 0,
-                y: Number(row.pos_y) || 0,
-                z: Number(row.pos_z) || 0,
-                color: row.color || '#38bdf8'
-            };
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
         }
 
-        function mapBoxToDbRow(box) {
-            return {
-                id: box.id,
-                tag_id: (box.tagId || '00').toUpperCase().slice(0, 2),
-                part_name: box.partName,
-                part_description: box.partDescription || '',
-                width_in: box.w,
-                height_in: box.h,
-                depth_in: box.d,
-                pos_x: box.x,
-                pos_y: box.y,
-                pos_z: box.z,
-                color: box.color || '#38bdf8',
-                updated_at: new Date().toISOString()
-            };
-        }
+        function updateSyncBadgeUI() {
+            var dot = document.getElementById('sync-dot');
+            var label = document.getElementById('sync-label');
+            var modalStatus = document.getElementById('modal-sync-status');
 
-        function mapDbRowToLog(row) {
-            return {
-                id: row.id,
-                timestamp: row.timestamp_label,
-                tech: row.tech_name,
-                action: row.action_type,
-                tagId: row.tag_id || '--',
-                partName: row.part_name,
-                note: row.note || ''
-            };
-        }
-
-        function cloudUpsertBox(box) {
-            if (!isSupabaseConnected || !supabaseClient) {
-                showToast('Not connected to Supabase — changes are not saved to cloud', 'warning');
-                return;
+            if (isSupabaseConnected) {
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+                label.textContent = 'Supabase Live';
+                if (modalStatus) {
+                    modalStatus.textContent = 'Connected & Realtime Active';
+                    modalStatus.className = 'font-mono text-[11px] text-emerald-400';
+                }
+            } else {
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+                label.textContent = 'Supabase Disconnected';
+                if (modalStatus) {
+                    modalStatus.textContent = 'Supabase Disconnected';
+                    modalStatus.className = 'font-mono text-[11px] text-amber-400';
+                }
             }
-            supabaseClient.from(INVENTORY_TABLE).upsert(mapBoxToDbRow(box)).then(function(res) {
-                if (res.error) {
-                    console.error('Cloud upsert box error:', res.error);
-                    showToast('Supabase save failed: ' + res.error.message, 'error');
-                }
-            });
-        }
-
-        function cloudUpsertManyBoxes(boxList) {
-            if (!isSupabaseConnected || !supabaseClient || !boxList || boxList.length === 0) return;
-            var rows = boxList.map(mapBoxToDbRow);
-            supabaseClient.from(INVENTORY_TABLE).upsert(rows).then(function(res) {
-                if (res.error) {
-                    console.error('Cloud batch upsert error:', res.error);
-                    showToast('Supabase update failed: ' + res.error.message, 'error');
-                }
-            });
-        }
-
-        function cloudDeleteBox(boxId) {
-            if (!isSupabaseConnected || !supabaseClient) {
-                showToast('Not connected to Supabase — delete not synced', 'warning');
-                return;
-            }
-            supabaseClient.from(INVENTORY_TABLE).delete().eq('id', boxId).then(function(res) {
-                if (res.error) {
-                    console.error('Cloud delete box error:', res.error);
-                    showToast('Supabase delete failed: ' + res.error.message, 'error');
-                }
-            });
-        }
-
-        function cloudInsertLog(logEntry) {
-            if (!isSupabaseConnected || !supabaseClient) return;
-            supabaseClient.from(LOGS_TABLE).insert({
-                id: logEntry.id,
-                timestamp_label: logEntry.timestamp,
-                tech_name: logEntry.tech,
-                action_type: logEntry.action,
-                tag_id: logEntry.tagId || '--',
-                part_name: logEntry.partName,
-                note: logEntry.note || ''
-            }).then(function(res) {
-                if (res.error) console.error('Cloud insert log error:', res.error);
-            });
         }
 
         function saveAndConnectSupabase() {
             var url = document.getElementById('sb-url-input').value.trim();
             var key = document.getElementById('sb-key-input').value.trim();
             if (!url || !key) {
-                showToast('Please enter both Supabase URL and Anon Key', 'warning');
+                showToast('Enter both Supabase Project URL and Anon Key.', 'warning');
                 return;
             }
-            connectSupabase(url, key);
-            closeModal('modal-supabase');
+            connectSupabaseClient(url, key, true);
         }
 
         function disconnectSupabase() {
-            activeSupabaseUrl = '';
-            activeSupabaseKey = '';
             if (realtimeChannel && supabaseClient) {
                 supabaseClient.removeChannel(realtimeChannel);
+                realtimeChannel = null;
             }
             supabaseClient = null;
             isSupabaseConnected = false;
+            activeSupabaseUrl = '';
+            activeSupabaseKey = '';
             boxes = [];
             activityLogs = [];
             deselectBox();
             syncBoxesTo3D();
             renderInventoryList();
-            renderActivityLogs();
             updateStats();
-            updateSyncBadge(false, 'Supabase Disconnected');
-            closeModal('modal-supabase');
-            showToast('Disconnected from Supabase', 'info');
+            updateSyncBadgeUI();
+            showToast('Disconnected from Supabase.', 'info');
         }
 
-        function pushSampleToSupabase() {
-            if (!isSupabaseConnected || !supabaseClient) {
-                showToast('Connect to Supabase first before seeding sample boxes', 'warning');
+        function connectSupabaseClient(url, key, showFeedback) {
+            if (!window.supabase || !window.supabase.createClient) {
+                showToast('Supabase client script failed to load.', 'error');
                 return;
             }
-            var sampleRows = DEFAULT_BOXES.map(mapBoxToDbRow);
-            supabaseClient.from(INVENTORY_TABLE).upsert(sampleRows).then(function(res) {
+            try {
+                if (realtimeChannel && supabaseClient) {
+                    supabaseClient.removeChannel(realtimeChannel);
+                }
+                activeSupabaseUrl = url;
+                activeSupabaseKey = key;
+                supabaseClient = window.supabase.createClient(url, key);
+                isSupabaseConnected = true;
+                updateSyncBadgeUI();
+                pullAllFromSupabase(showFeedback);
+                subscribeRealtime();
+            } catch (err) {
+                isSupabaseConnected = false;
+                updateSyncBadgeUI();
+                showToast('Supabase connection error: ' + err.message, 'error');
+            }
+        }
+
+        function mapRowToBox(row) {
+            return {
+                id: row.id,
+                tagId: String(row.tag_id || '00').slice(0, 2).toUpperCase(),
+                partName: row.part_name || 'Unnamed Part',
+                partDescription: row.part_description || '',
+                w: Number(row.width_in) || 18,
+                d: Number(row.depth_in) || 18,
+                h: Number(row.height_in) || 12,
+                x: Math.max(0, Number(row.pos_x) || 0),
+                y: Math.max(0, Number(row.pos_y) || 0),
+                z: Math.max(0, Number(row.pos_z) || 0),
+                color: row.color || '#38bdf8'
+            };
+        }
+
+        function mapBoxToRow(box) {
+            return {
+                id: box.id,
+                tag_id: String(box.tagId || '00').slice(0, 2).toUpperCase(),
+                part_name: box.partName,
+                part_description: box.partDescription || '',
+                width_in: box.w,
+                height_in: box.h,
+                depth_in: box.d,
+                pos_x: Math.max(0, box.x),
+                pos_y: Math.max(0, box.y),
+                pos_z: Math.max(0, box.z),
+                color: box.color || '#38bdf8',
+                updated_at: new Date().toISOString()
+            };
+        }
+
+        function pullAllFromSupabase(showFeedback) {
+            if (!supabaseClient) return;
+
+            supabaseClient.from(INVENTORY_TABLE).select('*').then(function(res) {
                 if (res.error) {
-                    showToast('Seed failed: ' + res.error.message, 'error');
-                } else {
-                    showToast('Seeded ' + sampleRows.length + ' sample boxes into KelownaInventory', 'success');
-                    closeModal('modal-supabase');
+                    showToast('Supabase read error: ' + res.error.message, 'error');
+                    return;
+                }
+                boxes = (res.data || []).map(mapRowToBox);
+                applyGravityToAllBoxes();
+                syncBoxesTo3D();
+                renderInventoryList();
+                updateStats();
+                if (selectedBoxId) {
+                    var stillExists = boxes.some(function(b) { return b.id === selectedBoxId; });
+                    if (!stillExists) deselectBox();
+                    else refreshInspectorUI();
+                }
+                if (showFeedback) {
+                    showToast('Synced ' + boxes.length + ' boxes from Supabase.', 'success');
+                }
+            });
+
+            supabaseClient.from(LOGS_TABLE).select('*').order('created_at', { ascending: false }).limit(100).then(function(res) {
+                if (!res.error && res.data) {
+                    activityLogs = res.data.map(function(r) {
+                        return {
+                            id: r.id,
+                            time: r.timestamp_label || '',
+                            tech: r.tech_name || 'Tech',
+                            action: r.action_type || '',
+                            tagId: r.tag_id || '--',
+                            partName: r.part_name || '',
+                            note: r.note || ''
+                        };
+                    });
+                    if (!document.getElementById('modal-logs').classList.contains('hidden')) {
+                        renderActivityLogs();
+                    }
                 }
             });
         }
 
-        function updateSyncBadge(connected, text) {
-            var dot = document.getElementById('sync-dot');
-            var label = document.getElementById('sync-label');
-            var modalStatus = document.getElementById('modal-sync-status');
+        function subscribeRealtime() {
+            if (!supabaseClient) return;
+            realtimeChannel = supabaseClient
+                .channel('kelowna-inventory-live')
+                .on('postgres_changes', { event: '*', schema: 'public', table: INVENTORY_TABLE }, function() {
+                    if (!isDraggingBox) {
+                        pullAllFromSupabase(false);
+                    }
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: LOGS_TABLE }, function() {
+                    pullAllFromSupabase(false);
+                })
+                .subscribe();
+        }
 
-            label.textContent = text;
-            if (connected) {
-                dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
-                if (modalStatus) {
-                    modalStatus.textContent = 'Connected • Live Multi-Device Sync Active';
-                    modalStatus.className = 'font-mono text-[11px] text-emerald-400';
-                }
-            } else {
-                dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
-                if (modalStatus) {
-                    modalStatus.textContent = text;
-                    modalStatus.className = 'font-mono text-[11px] text-amber-400';
-                }
+        function cloudUpsertBox(box) {
+            if (!supabaseClient || !isSupabaseConnected) {
+                showToast('Connect Supabase (Sync / SQL) so changes save to the cloud.', 'warning');
+                return;
             }
+            supabaseClient.from(INVENTORY_TABLE).upsert(mapBoxToRow(box)).then(function(res) {
+                if (res.error) showToast('Cloud save error: ' + res.error.message, 'error');
+            });
+        }
+
+        function cloudUpsertManyBoxes(boxList) {
+            if (!boxList || boxList.length === 0) return;
+            if (!supabaseClient || !isSupabaseConnected) {
+                showToast('Connect Supabase (Sync / SQL) so changes save to the cloud.', 'warning');
+                return;
+            }
+            var rows = boxList.map(mapBoxToRow);
+            supabaseClient.from(INVENTORY_TABLE).upsert(rows).then(function(res) {
+                if (res.error) showToast('Cloud batch update error: ' + res.error.message, 'error');
+            });
+        }
+
+        function cloudDeleteBox(boxId) {
+            if (!supabaseClient || !isSupabaseConnected) {
+                showToast('Connect Supabase (Sync / SQL) so removals sync to the cloud.', 'warning');
+                return;
+            }
+            supabaseClient.from(INVENTORY_TABLE).delete().eq('id', boxId).then(function(res) {
+                if (res.error) showToast('Cloud delete error: ' + res.error.message, 'error');
+            });
+        }
+
+        function cloudInsertLog(entry) {
+            if (!supabaseClient || !isSupabaseConnected) return;
+            supabaseClient.from(LOGS_TABLE).insert({
+                id: entry.id,
+                timestamp_label: entry.time,
+                tech_name: entry.tech,
+                action_type: entry.action,
+                tag_id: entry.tagId,
+                part_name: entry.partName,
+                note: entry.note
+            }).then(function(res) {
+                if (res.error) console.warn('Log sync error:', res.error.message);
+            });
+        }
+
+        function pushSampleToSupabase() {
+            if (!supabaseClient || !isSupabaseConnected) {
+                showToast('Connect to Supabase first.', 'warning');
+                return;
+            }
+            var sampleRows = DEFAULT_BOXES.map(mapBoxToRow);
+            supabaseClient.from(INVENTORY_TABLE).upsert(sampleRows).then(function(res) {
+                if (res.error) {
+                    showToast('Seed error: ' + res.error.message, 'error');
+                } else {
+                    showToast('Seeded 4 sample boxes into KelownaInventory.', 'success');
+                    pullAllFromSupabase(false);
+                }
+            });
         }
 
         function copySqlSchema() {
             var sqlText = document.getElementById('supabase-sql-code').textContent;
-            var textarea = document.createElement('textarea');
-            textarea.value = sqlText;
-            document.body.appendChild(textarea);
-            textarea.select();
+            var temp = document.createElement('textarea');
+            temp.value = sqlText;
+            document.body.appendChild(temp);
+            temp.select();
             try {
                 document.execCommand('copy');
-                var btnLabel = document.getElementById('copy-sql-text');
-                btnLabel.textContent = 'Copied!';
-                setTimeout(function() { btnLabel.textContent = 'Copy SQL Script'; }, 2000);
-                showToast('SQL schema copied to clipboard', 'success');
+                document.getElementById('copy-sql-text').textContent = 'Copied!';
+                setTimeout(function() {
+                    document.getElementById('copy-sql-text').textContent = 'Copy SQL Script';
+                }, 2000);
             } catch (e) {
-                showToast('Select the SQL block and press Ctrl+C / Cmd+C', 'info');
+                showToast('Could not copy automatically.', 'warning');
             }
-            document.body.removeChild(textarea);
+            document.body.removeChild(temp);
         }
 
         function initThreeJS() {
             var container = document.getElementById('canvas-container');
-            var width = container.clientWidth || 800;
-            var height = container.clientHeight || 500;
-
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x090d16);
-            scene.fog = new THREE.FogExp2(0x090d16, 0.0014);
+            scene.fog = new THREE.FogExp2(0x090d16, 0.0018);
 
-            camera = new THREE.PerspectiveCamera(45, width / height, 1, 1500);
-            camera.position.set(175, 165, 195);
+            var width = container.clientWidth || window.innerWidth;
+            var height = container.clientHeight || window.innerHeight;
+
+            camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
+            camera.position.set(175, 145, 195);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
             renderer.setSize(width, height);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             container.appendChild(renderer.domElement);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 52, 0);
             controls.enableDamping = true;
-            controls.dampingFactor = 0.07;
+            controls.dampingFactor = 0.06;
+            controls.target.set(0, 35, 0);
+            controls.minDistance = 40;
             controls.maxDistance = 420;
-            controls.minDistance = 30;
-            controls.maxPolarAngle = Math.PI * 0.495;
-            controls.update();
+            controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
             var ambientLight = new THREE.AmbientLight(0xdbeafe, 0.65);
             scene.add(ambientLight);
 
             var dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-            dirLight.position.set(110, 210, 140);
+            dirLight.position.set(140, 220, 150);
             dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 1024;
-            dirLight.shadow.mapSize.height = 1024;
-            dirLight.shadow.camera.near = 10;
-            dirLight.shadow.camera.far = 500;
-            var d = 100;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 20;
+            dirLight.shadow.camera.far = 550;
+            var d = 110;
             dirLight.shadow.camera.left = -d;
             dirLight.shadow.camera.right = d;
             dirLight.shadow.camera.top = d;
             dirLight.shadow.camera.bottom = -d;
             scene.add(dirLight);
 
-            var lockerLight = new THREE.PointLight(0x38bdf8, 0.5, 220);
-            lockerLight.position.set(0, 112, 0);
-            scene.add(lockerLight);
+            var fillLight = new THREE.DirectionalLight(0x38bdf8, 0.25);
+            fillLight.position.set(-120, 90, -120);
+            scene.add(fillLight);
 
             lockerGroup = new THREE.Group();
-            boxesGroup = new THREE.Group();
             scene.add(lockerGroup);
-            scene.add(boxesGroup);
+            buildLockerStructure();
 
-            buildLockerEnclosure();
+            boxesGroup = new THREE.Group();
+            scene.add(boxesGroup);
 
             raycaster = new THREE.Raycaster();
             mouse = new THREE.Vector2();
             dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
             var domElem = renderer.domElement;
-            domElem.addEventListener('pointermove', onPointerMove);
             domElem.addEventListener('pointerdown', onPointerDown);
-            domElem.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
             window.addEventListener('resize', onWindowResize);
 
             animate();
         }
 
-        function buildLockerEnclosure() {
-            var floorGeo = new THREE.BoxGeometry(LOCKER_SIZE + 4, 2, LOCKER_SIZE + 4);
-            var floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.1 });
-            var floorMesh = new THREE.Mesh(floorGeo, floorMat);
-            floorMesh.position.set(0, -1, 0);
-            floorMesh.receiveShadow = true;
-            lockerGroup.add(floorMesh);
+        function buildLockerStructure() {
+            var size = LOCKER_SIZE;
+            var half = size / 2;
 
-            var floorGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x38bdf8, 0x334155);
-            floorGrid.position.set(0, 0.1, 0);
-            lockerGroup.add(floorGrid);
+            var floorGeo = new THREE.PlaneGeometry(size, size);
+            var floorMat = new THREE.MeshStandardMaterial({
+                color: 0x1e293b,
+                roughness: 0.85,
+                metalness: 0.1
+            });
+            var floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            lockerGroup.add(floor);
+
+            var gridHelper = new THREE.GridHelper(size, 10, 0x38bdf8, 0x334155);
+            gridHelper.position.y = 0.15;
+            lockerGroup.add(gridHelper);
+
+            var outerFloorGeo = new THREE.PlaneGeometry(420, 420);
+            var outerFloorMat = new THREE.MeshStandardMaterial({
+                color: 0x090d16,
+                roughness: 0.95
+            });
+            var outerFloor = new THREE.Mesh(outerFloorGeo, outerFloorMat);
+            outerFloor.rotation.x = -Math.PI / 2;
+            outerFloor.position.y = -0.2;
+            outerFloor.receiveShadow = true;
+            lockerGroup.add(outerFloor);
+
+            var doorThresholdGeo = new THREE.BoxGeometry(size, 0.5, 4);
+            var doorThresholdMat = new THREE.MeshStandardMaterial({
+                color: 0x10b981,
+                emissive: 0x059669,
+                emissiveIntensity: 0.35
+            });
+            var doorThreshold = new THREE.Mesh(doorThresholdGeo, doorThresholdMat);
+            doorThreshold.position.set(0, 0.25, half + 2);
+            lockerGroup.add(doorThreshold);
 
             var wallMat = new THREE.MeshStandardMaterial({
-                color: 0x0f172a,
+                color: 0x1e293b,
                 transparent: true,
-                opacity: 0.55,
+                opacity: 0.14,
+                roughness: 0.6,
                 side: THREE.DoubleSide,
-                roughness: 0.7
+                depthWrite: false
             });
 
-            var backWall = new THREE.Mesh(new THREE.PlaneGeometry(LOCKER_SIZE, LOCKER_SIZE), wallMat);
-            backWall.position.set(0, LOCKER_SIZE / 2, -LOCKER_SIZE / 2);
+            var backWall = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat);
+            backWall.position.set(0, half, -half);
             lockerGroup.add(backWall);
 
-            var backGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x1e293b, 0x1e293b);
-            backGrid.rotation.x = Math.PI / 2;
-            backGrid.position.set(0, LOCKER_SIZE / 2, -LOCKER_SIZE / 2 + 0.1);
-            lockerGroup.add(backGrid);
-
-            var leftWall = new THREE.Mesh(new THREE.PlaneGeometry(LOCKER_SIZE, LOCKER_SIZE), wallMat);
+            var leftWall = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat);
             leftWall.rotation.y = Math.PI / 2;
-            leftWall.position.set(-LOCKER_SIZE / 2, LOCKER_SIZE / 2, 0);
+            leftWall.position.set(-half, half, 0);
             lockerGroup.add(leftWall);
 
-            var leftGrid = new THREE.GridHelper(LOCKER_SIZE, 10, 0x1e293b, 0x1e293b);
-            leftGrid.rotation.z = Math.PI / 2;
-            leftGrid.position.set(-LOCKER_SIZE / 2 + 0.1, LOCKER_SIZE / 2, 0);
-            lockerGroup.add(leftGrid);
+            var rightWall = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.set(half, half, 0);
+            lockerGroup.add(rightWall);
 
-            var frameGeo = new THREE.BoxGeometry(LOCKER_SIZE, LOCKER_SIZE, LOCKER_SIZE);
-            var edgesGeo = new THREE.EdgesGeometry(frameGeo);
-            var frameMat = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 });
-            var frameWire = new THREE.LineSegments(edgesGeo, frameMat);
-            frameWire.position.set(0, LOCKER_SIZE / 2, 0);
-            lockerGroup.add(frameWire);
+            var edgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
+            var edgesMat = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.65 });
+            var wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
+            wireframe.position.set(0, half, 0);
+            lockerGroup.add(wireframe);
 
-            var thresholdGeo = new THREE.BoxGeometry(LOCKER_SIZE, 0.8, 2.5);
-            var thresholdMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-            var threshold = new THREE.Mesh(thresholdGeo, thresholdMat);
-            threshold.position.set(0, 0.4, LOCKER_SIZE / 2);
-            lockerGroup.add(threshold);
-
-            var drumGeo = new THREE.CylinderGeometry(4, 4, LOCKER_SIZE - 4, 16);
-            drumGeo.rotateZ(Math.PI / 2);
-            var drumMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.4 });
-            var drum = new THREE.Mesh(drumGeo, drumMat);
-            drum.position.set(0, LOCKER_SIZE - 4, LOCKER_SIZE / 2 - 2);
-            lockerGroup.add(drum);
-
-            var doorLabel = createTextSprite('FRONT DOOR (10\' WIDE)', '#10b981', 'rgba(15, 23, 42, 0.85)');
-            doorLabel.position.set(0, 2, LOCKER_SIZE / 2 + 12);
-            doorLabel.scale.set(42, 10.5, 1);
-            lockerGroup.add(doorLabel);
-
-            for (var ft = 2; ft <= 10; ft += 2) {
-                var tickLabel = createTextSprite(ft + "'", '#94a3b8', 'rgba(15, 23, 42, 0.6)');
-                tickLabel.position.set(-LOCKER_SIZE / 2 - 6, ft * 12, LOCKER_SIZE / 2);
-                tickLabel.scale.set(14, 5, 1);
-                lockerGroup.add(tickLabel);
-            }
+            addWallLabel('BACK WALL (10ft)', 0, half, -half + 0.5, 0);
+            addWallLabel('LEFT WALL (10ft)', -half + 0.5, half, 0, Math.PI / 2);
+            addWallLabel('RIGHT WALL (10ft)', half - 0.5, half, 0, -Math.PI / 2);
         }
 
-        function createTextSprite(text, textColor, bgColor) {
+        function addWallLabel(text, x, y, z, rotY) {
             var canvas = document.createElement('canvas');
             canvas.width = 512;
-            canvas.height = 128;
+            canvas.height = 64;
             var ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = bgColor || 'rgba(15,23,42,0.85)';
-            ctx.beginPath();
-            if (ctx.roundRect) {
-                ctx.roundRect(12, 16, 488, 96, 24);
-            } else {
-                ctx.rect(12, 16, 488, 96);
-            }
-            ctx.fill();
-
-            ctx.fillStyle = textColor || '#ffffff';
-            ctx.font = 'bold 34px Inter, sans-serif';
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 24px Inter, sans-serif';
+            ctx.fillStyle = '#94a3b8';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(text, 256, 66);
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-            var texture = new THREE.CanvasTexture(canvas);
-            texture.minFilter = THREE.LinearFilter;
-            var material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
-            return new THREE.Sprite(material);
+            var tex = new THREE.CanvasTexture(canvas);
+            var mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+            var mesh = new THREE.Mesh(new THREE.PlaneGeometry(48, 6), mat);
+            mesh.position.set(x, y, z);
+            mesh.rotation.y = rotY;
+            lockerGroup.add(mesh);
         }
 
-        function createTwoDigitBadgeSprite(tagId, partName) {
+        function createBoxLabelSprite(box, isSelected) {
             var canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 160;
+            canvas.width = 360;
+            canvas.height = 92;
             var ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+            ctx.fillStyle = isSelected ? 'rgba(14, 165, 233, 0.95)' : 'rgba(15, 23, 42, 0.9)';
+            ctx.strokeStyle = isSelected ? '#ffffff' : '#f59e0b';
+            ctx.lineWidth = 4;
             ctx.beginPath();
             if (ctx.roundRect) {
-                ctx.roundRect(8, 16, 496, 128, 28);
+                ctx.roundRect(6, 6, canvas.width - 12, canvas.height - 12, 16);
             } else {
-                ctx.rect(8, 16, 496, 128);
+                ctx.rect(6, 6, canvas.width - 12, canvas.height - 12);
             }
             ctx.fill();
-
-            ctx.strokeStyle = '#f59e0b';
-            ctx.lineWidth = 6;
             ctx.stroke();
 
             ctx.fillStyle = '#f59e0b';
             ctx.beginPath();
             if (ctx.roundRect) {
-                ctx.roundRect(22, 30, 112, 100, 18);
+                ctx.roundRect(16, 18, 76, 56, 10);
             } else {
-                ctx.rect(22, 30, 112, 100);
+                ctx.rect(16, 18, 76, 56);
             }
             ctx.fill();
 
+            ctx.font = 'bold 34px JetBrains Mono, monospace';
             ctx.fillStyle = '#090d16';
-            ctx.font = 'bold 56px JetBrains Mono, monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText((tagId || '00').toUpperCase(), 78, 82);
+            ctx.fillText('#' + (box.tagId || '00'), 54, 47);
 
+            ctx.font = 'bold 23px Inter, sans-serif';
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 30px Inter, sans-serif';
             ctx.textAlign = 'left';
-            var clippedName = (partName || '').length > 18 ? partName.slice(0, 17) + '…' : partName;
-            ctx.fillText(clippedName, 152, 82);
+            var labelText = box.partName || 'Item';
+            if (labelText.length > 17) labelText = labelText.slice(0, 16) + '…';
+            ctx.fillText(labelText, 104, 36);
+
+            ctx.font = '600 16px JetBrains Mono, monospace';
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillText(box.w + '"×' + box.d + '"×' + box.h + '"', 104, 62);
 
             var texture = new THREE.CanvasTexture(canvas);
             texture.minFilter = THREE.LinearFilter;
-            var material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
-            return new THREE.Sprite(material);
+            var spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            var sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(28, 7.2, 1);
+            return sprite;
         }
 
-        function checkHorizontalOverlap(a, b) {
-            var eps = 0.05;
-            return (
-                a.x < b.x + b.w - eps &&
-                a.x + a.w > b.x + eps &&
-                a.z < b.z + b.d - eps &&
-                a.z + a.d > b.z + eps
-            );
+        function syncBoxesTo3D() {
+            while (boxesGroup.children.length > 0) {
+                boxesGroup.remove(boxesGroup.children[0]);
+            }
+            boxMeshes = {};
+
+            var half = LOCKER_SIZE / 2;
+
+            boxes.forEach(function(box) {
+                var isSelected = box.id === selectedBoxId;
+                var isBeingDragged = isDraggingBox && box.id === draggedBoxId;
+
+                var geo = new THREE.BoxGeometry(box.w, box.h, box.d);
+                var baseColor = new THREE.Color(box.color || '#38bdf8');
+                var mat = new THREE.MeshStandardMaterial({
+                    color: baseColor,
+                    roughness: 0.45,
+                    metalness: 0.15,
+                    transparent: true,
+                    opacity: isBeingDragged ? 0.85 : (isSelected ? 0.96 : 0.88),
+                    emissive: isBeingDragged && isOverlappingCollision ? new THREE.Color(0xf43f5e) : (isSelected ? baseColor : new THREE.Color(0x000000)),
+                    emissiveIntensity: isBeingDragged && isOverlappingCollision ? 0.45 : (isSelected ? 0.25 : 0)
+                });
+
+                var mesh = new THREE.Mesh(geo, mat);
+                var cx = box.x + (box.w / 2) - half;
+                var cy = box.y + (box.h / 2);
+                var cz = box.z + (box.d / 2) - half;
+
+                mesh.position.set(cx, cy, cz);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData = { boxId: box.id };
+
+                var edgeGeo = new THREE.EdgesGeometry(geo);
+                var edgeMat = new THREE.LineBasicMaterial({
+                    color: isBeingDragged && isOverlappingCollision ? 0xf43f5e : (isSelected ? 0xffffff : 0x0f172a),
+                    linewidth: 2
+                });
+                var wireframe = new THREE.LineSegments(edgeGeo, edgeMat);
+                mesh.add(wireframe);
+
+                var labelSprite = createBoxLabelSprite(box, isSelected);
+                labelSprite.position.set(0, (box.h / 2) + 5.5, 0);
+                mesh.add(labelSprite);
+
+                boxesGroup.add(mesh);
+                boxMeshes[box.id] = mesh;
+            });
         }
 
-        function checkAABBOverlap(a, b) {
-            var eps = 0.05;
-            return (
-                a.x < b.x + b.w - eps &&
-                a.x + a.w > b.x + eps &&
-                a.y < b.y + b.h - eps &&
-                a.y + a.h > b.y + eps &&
-                a.z < b.z + b.d - eps &&
-                a.z + a.d > b.z + eps
-            );
-        }
-
-        function computeRestingElevation(x, z, w, d, h, ignoreBoxId) {
-            var maxSupportTopY = 0;
-            for (var i = 0; i < boxes.length; i++) {
-                var other = boxes[i];
-                if (other.id === ignoreBoxId) continue;
-                if (checkHorizontalOverlap({ x: x, z: z, w: w, d: d }, other)) {
-                    var topY = other.y + other.h;
-                    if (topY > maxSupportTopY) {
-                        maxSupportTopY = topY;
-                    }
+        function setCameraView(view) {
+            document.querySelectorAll('.cam-btn').forEach(function(btn) {
+                if (btn.dataset.view === view) {
+                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition';
+                } else {
+                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
                 }
+            });
+
+            controls.target.set(0, 35, 0);
+            if (view === 'iso') {
+                camera.position.set(175, 145, 195);
+            } else if (view === 'front') {
+                camera.position.set(0, 62, 225);
+            } else if (view === 'top') {
+                camera.position.set(0, 245, 1);
+                controls.target.set(0, 0, 0);
+            } else if (view === 'interior') {
+                camera.position.set(0, 48, 42);
+                controls.target.set(0, 30, -35);
             }
-            return maxSupportTopY;
-        }
-
-        function applyGravityToAllBoxes() {
-            var changedBoxes = [];
-            var settled = false;
-            var safetyCounter = 0;
-
-            while (!settled && safetyCounter < 50) {
-                settled = true;
-                safetyCounter++;
-
-                var sorted = boxes.slice().sort(function(a, b) { return a.y - b.y; });
-
-                for (var i = 0; i < sorted.length; i++) {
-                    var b = sorted[i];
-                    var targetY = computeRestingElevation(b.x, b.z, b.w, b.d, b.h, b.id);
-                    if (Math.abs(b.y - targetY) > 0.05) {
-                        b.y = targetY;
-                        settled = false;
-                        if (changedBoxes.indexOf(b) === -1) {
-                            changedBoxes.push(b);
-                        }
-                    }
-                }
-            }
-
-            return changedBoxes;
-        }
-
-        function isValidPlacement(candidate, ignoreBoxId) {
-            if (
-                candidate.x < 0 ||
-                candidate.y < 0 ||
-                candidate.z < 0 ||
-                candidate.x + candidate.w > LOCKER_SIZE ||
-                candidate.y + candidate.h > LOCKER_SIZE ||
-                candidate.z + candidate.d > LOCKER_SIZE
-            ) {
-                return false;
-            }
-
-            for (var i = 0; i < boxes.length; i++) {
-                var other = boxes[i];
-                if (other.id === ignoreBoxId) continue;
-                if (checkAABBOverlap(candidate, other)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        function findSmartPosition(w, d, h, ignoreBoxId) {
-            var step = 4;
-
-            for (var fz = 4; fz <= LOCKER_SIZE - d - 2; fz += step) {
-                for (var fx = 4; fx <= LOCKER_SIZE - w - 2; fx += step) {
-                    var candFloor = { x: fx, y: 0, z: fz, w: w, d: d, h: h };
-                    if (isValidPlacement(candFloor, ignoreBoxId)) {
-                        return { x: fx, y: 0, z: fz };
-                    }
-                }
-            }
-
-            var sortedBases = boxes
-                .filter(function(b) { return b.id !== ignoreBoxId; })
-                .sort(function(a, b) { return (a.y + a.h) - (b.y + b.h); });
-
-            for (var i = 0; i < sortedBases.length; i++) {
-                var base = sortedBases[i];
-                var stackY = base.y + base.h;
-                if (stackY + h <= LOCKER_SIZE) {
-                    var candStack = { x: base.x, y: stackY, z: base.z, w: w, d: d, h: h };
-                    if (isValidPlacement(candStack, ignoreBoxId)) {
-                        return { x: base.x, y: stackY, z: base.z };
-                    }
-                }
-            }
-
-            return { x: 0, y: 0, z: 0 };
+            controls.update();
         }
 
         function getRaycastBoxHit(clientX, clientY) {
@@ -1299,12 +1211,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
-            var meshes = [];
-            boxesGroup.children.forEach(function(group) {
-                if (group.children[0]) meshes.push(group.children[0]);
-            });
-
-            var intersects = raycaster.intersectObjects(meshes, false);
+            var targets = Object.values(boxMeshes);
+            var intersects = raycaster.intersectObjects(targets, false);
             return intersects.length > 0 ? intersects[0] : null;
         }
 
@@ -1319,6 +1227,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     isDraggingBox = true;
                     draggedBoxId = box.id;
                     dragStartCoords = { x: box.x, y: box.y, z: box.z };
+                    lastValidDragCoords = { x: box.x, y: box.y, z: box.z };
+                    isOverlappingCollision = false;
 
                     controls.enabled = false;
                     renderer.domElement.style.cursor = 'grabbing';
@@ -1348,49 +1258,54 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     var targetCenterX = intersectPoint.x + dragOffset.x;
                     var targetCenterZ = intersectPoint.z + dragOffset.z;
 
-                    var rawX = Math.round(targetCenterX + (LOCKER_SIZE / 2) - (box.w / 2));
-                    var rawZ = Math.round(targetCenterZ + (LOCKER_SIZE / 2) - (box.d / 2));
+                    var rawX = targetCenterX + (LOCKER_SIZE / 2) - (box.w / 2);
+                    var rawZ = targetCenterZ + (LOCKER_SIZE / 2) - (box.d / 2);
 
-                    var clampedX = Math.max(0, Math.min(LOCKER_SIZE - box.w, rawX));
-                    var clampedZ = Math.max(0, Math.min(LOCKER_SIZE - box.d, rawZ));
+                    var resolved = resolveCollisionAndStack(
+                        rawX,
+                        rawZ,
+                        box.w,
+                        box.d,
+                        box.h,
+                        box.id,
+                        lastValidDragCoords
+                    );
 
-                    var targetY = computeRestingElevation(clampedX, clampedZ, box.w, box.d, box.h, box.id);
+                    isOverlappingCollision = resolved.collided;
+                    box.x = Math.max(0, Math.min(LOCKER_SIZE - box.w, resolved.x));
+                    box.z = Math.max(0, Math.min(LOCKER_SIZE - box.d, resolved.z));
+                    box.y = Math.max(0, Math.min(LOCKER_SIZE - box.h, resolved.y));
 
-                    if (targetY + box.h <= LOCKER_SIZE) {
-                        box.x = clampedX;
-                        box.z = clampedZ;
-                        box.y = targetY;
+                    lastValidDragCoords = { x: box.x, y: box.y, z: box.z };
 
-                        applyGravityToAllBoxes();
-                        syncBoxesTo3D();
-                    }
+                    applyGravityToAllBoxes();
+                    syncBoxesTo3D();
                 }
                 return;
             }
 
             var hit = getRaycastBoxHit(event.clientX, event.clientY);
             var tooltip = document.getElementById('hover-tooltip');
-
             if (hit) {
-                var hitId = hit.object.userData.boxId;
-                var hoveredBox = boxes.find(function(b) { return b.id === hitId; });
-                if (hoveredBox) {
-                    renderer.domElement.style.cursor = 'grab';
-                    document.getElementById('tt-tag').textContent = hoveredBox.tagId;
-                    document.getElementById('tt-name').textContent = hoveredBox.partName;
-                    document.getElementById('tt-desc').textContent = hoveredBox.partDescription || 'No description';
-                    document.getElementById('tt-dim').textContent = hoveredBox.w + '×' + hoveredBox.d + '×' + hoveredBox.h + '"';
-                    document.getElementById('tt-pos').textContent = 'X:' + hoveredBox.x + '" Y:' + hoveredBox.y + '" Z:' + hoveredBox.z + '"';
+                renderer.domElement.style.cursor = 'grab';
+                var box = boxes.find(function(b) { return b.id === hit.object.userData.boxId; });
+                if (box) {
+                    document.getElementById('tt-tag').textContent = box.tagId || '00';
+                    document.getElementById('tt-name').textContent = box.partName;
+                    document.getElementById('tt-desc').textContent = box.partDescription || 'No description';
+                    document.getElementById('tt-dim').textContent = box.w + '×' + box.d + '×' + box.h + '"';
+                    document.getElementById('tt-pos').textContent = 'X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"';
 
-                    tooltip.style.left = Math.min(window.innerWidth - 270, event.clientX + 14) + 'px';
-                    tooltip.style.top = Math.min(window.innerHeight - 150, event.clientY + 14) + 'px';
                     tooltip.classList.remove('hidden');
-                    return;
+                    var tx = Math.min(window.innerWidth - 275, event.clientX + 14);
+                    var ty = Math.min(window.innerHeight - 150, event.clientY + 14);
+                    tooltip.style.left = Math.max(8, tx) + 'px';
+                    tooltip.style.top = Math.max(8, ty) + 'px';
                 }
+            } else {
+                renderer.domElement.style.cursor = 'default';
+                tooltip.classList.add('hidden');
             }
-
-            renderer.domElement.style.cursor = 'default';
-            tooltip.classList.add('hidden');
         }
 
         function onPointerUp(event) {
@@ -1403,142 +1318,391 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
                     moved = (box.x !== dragStartCoords.x || box.y !== dragStartCoords.y || box.z !== dragStartCoords.z);
                 }
 
+                var hadCollision = isOverlappingCollision;
                 isDraggingBox = false;
                 draggedBoxId = null;
                 dragStartCoords = null;
+                lastValidDragCoords = null;
+                isOverlappingCollision = false;
                 controls.enabled = true;
                 renderer.domElement.style.cursor = 'default';
 
-                if (moved && box) {
+                if (box) {
                     var settled = applyGravityToAllBoxes();
                     if (settled.indexOf(box) === -1) settled.push(box);
-                    cloudUpsertManyBoxes(settled);
-                    syncBoxesTo3D();
-                    renderInventoryList();
-                    updateStats();
-                    showToast('Moved Box #' + box.tagId + ' to X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"', 'info');
-                } else if (dist <= 5) {
-                    var hit = getRaycastBoxHit(event.clientX, event.clientY);
-                    if (hit) {
-                        selectBox(hit.object.userData.boxId, false);
+
+                    settled.forEach(function(b) {
+                        b.x = Math.max(0, Math.min(LOCKER_SIZE - b.w, Math.round(b.x)));
+                        b.z = Math.max(0, Math.min(LOCKER_SIZE - b.d, Math.round(b.z)));
+                        b.y = Math.max(0, Math.min(LOCKER_SIZE - b.h, Math.round(b.y)));
+                    });
+
+                    if (moved) {
+                        cloudUpsertManyBoxes(settled);
+                        syncBoxesTo3D();
+                        renderInventoryList();
+                        updateStats();
+                        if (hadCollision) {
+                            showToast('Collision avoided — Box #' + box.tagId + ' placed at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"', 'warning');
+                        } else {
+                            showToast('Box #' + box.tagId + ' positioned at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"', 'info');
+                        }
+                    } else if (dist <= 5) {
+                        var hit = getRaycastBoxHit(event.clientX, event.clientY);
+                        if (hit) {
+                            selectBox(hit.object.userData.boxId, false);
+                        }
                     }
                 }
             }
         }
 
-        function syncBoxesTo3D() {
-            if (!boxesGroup) return;
-            while (boxesGroup.children.length > 0) {
-                boxesGroup.remove(boxesGroup.children[0]);
-            }
-            boxMeshes = {};
+        function onWindowResize() {
+            var container = document.getElementById('canvas-container');
+            if (!container || !renderer || !camera) return;
+            var width = container.clientWidth || window.innerWidth;
+            var height = container.clientHeight || window.innerHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function checkHorizontalOverlap(a, b) {
+            return (
+                a.x < b.x + b.w &&
+                a.x + a.w > b.x &&
+                a.z < b.z + b.d &&
+                a.z + a.d > b.z
+            );
+        }
+
+        function check3DOverlap(a, b) {
+            return (
+                a.x < b.x + b.w &&
+                a.x + a.w > b.x &&
+                a.y < b.y + b.h &&
+                a.y + a.h > b.y &&
+                a.z < b.z + b.d &&
+                a.z + a.d > b.z
+            );
+        }
+
+        function isValidPlacement(candidate, ignoreBoxId) {
+            if (candidate.x < 0 || candidate.y < 0 || candidate.z < 0) return false;
+            if (candidate.x + candidate.w > LOCKER_SIZE) return false;
+            if (candidate.z + candidate.d > LOCKER_SIZE) return false;
+            if (candidate.y + candidate.h > LOCKER_SIZE) return false;
 
             for (var i = 0; i < boxes.length; i++) {
-                var box = boxes[i];
-                var isSelected = box.id === selectedBoxId;
+                var other = boxes[i];
+                if (other.id === ignoreBoxId) continue;
+                if (check3DOverlap(candidate, other)) {
+                    return false;
+                }
+            }
+            return true;
+        }
 
-                var group = new THREE.Group();
+        function computeRestingElevation(x, z, w, d, h, ignoreBoxId) {
+            var maxSupportTopY = 0;
+            for (var i = 0; i < boxes.length; i++) {
+                var other = boxes[i];
+                if (other.id === ignoreBoxId) continue;
+                if (checkHorizontalOverlap({ x: x, z: z, w: w, d: d }, other)) {
+                    var topY = other.y + other.h;
+                    if (topY > maxSupportTopY) {
+                        maxSupportTopY = topY;
+                    }
+                }
+            }
+            return maxSupportTopY;
+        }
 
-                var geo = new THREE.BoxGeometry(box.w, box.h, box.d);
-                var baseColor = new THREE.Color(box.color || '#38bdf8');
-                var mat = new THREE.MeshStandardMaterial({
-                    color: baseColor,
-                    roughness: 0.45,
-                    metalness: 0.15,
-                    transparent: true,
-                    opacity: isSelected ? 0.96 : 0.86
-                });
+        function resolveCollisionAndStack(candidateX, candidateZ, w, d, h, ignoreBoxId, fallbackCoords) {
+            var safeX = Math.max(0, Math.min(LOCKER_SIZE - w, Math.round(candidateX)));
+            var safeZ = Math.max(0, Math.min(LOCKER_SIZE - d, Math.round(candidateZ)));
+            var stackY = computeRestingElevation(safeX, safeZ, w, d, h, ignoreBoxId);
 
-                var mesh = new THREE.Mesh(geo, mat);
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-                mesh.userData.boxId = box.id;
+            var candidate = { x: safeX, y: stackY, z: safeZ, w: w, d: d, h: h };
+            if (isValidPlacement(candidate, ignoreBoxId)) {
+                return { x: safeX, y: stackY, z: safeZ, collided: false };
+            }
 
-                var edgeGeo = new THREE.EdgesGeometry(geo);
-                var edgeMat = new THREE.LineBasicMaterial({
-                    color: isSelected ? 0xffffff : 0x0f172a,
-                    linewidth: isSelected ? 2 : 1
-                });
-                var wireframe = new THREE.LineSegments(edgeGeo, edgeMat);
-                mesh.add(wireframe);
-
-                if (isSelected) {
-                    var selGeo = new THREE.BoxGeometry(box.w + 1.5, box.h + 1.5, box.d + 1.5);
-                    var selEdges = new THREE.EdgesGeometry(selGeo);
-                    var selLine = new THREE.LineSegments(selEdges, new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
-                    mesh.add(selLine);
+            if (fallbackCoords) {
+                var slideX = Math.max(0, Math.min(LOCKER_SIZE - w, safeX));
+                var slideXPos = {
+                    x: slideX,
+                    y: computeRestingElevation(slideX, fallbackCoords.z, w, d, h, ignoreBoxId),
+                    z: fallbackCoords.z,
+                    w: w, d: d, h: h
+                };
+                if (isValidPlacement(slideXPos, ignoreBoxId)) {
+                    return { x: slideXPos.x, y: slideXPos.y, z: slideXPos.z, collided: false };
                 }
 
-                var centerX = box.x + (box.w / 2) - (LOCKER_SIZE / 2);
-                var centerY = box.y + (box.h / 2);
-                var centerZ = box.z + (box.d / 2) - (LOCKER_SIZE / 2);
+                var slideZ = Math.max(0, Math.min(LOCKER_SIZE - d, safeZ));
+                var slideZPos = {
+                    x: fallbackCoords.x,
+                    y: computeRestingElevation(fallbackCoords.x, slideZ, w, d, h, ignoreBoxId),
+                    z: slideZ,
+                    w: w, d: d, h: h
+                };
+                if (isValidPlacement(slideZPos, ignoreBoxId)) {
+                    return { x: slideZPos.x, y: slideZPos.y, z: slideZPos.z, collided: false };
+                }
+            }
 
-                mesh.position.set(centerX, centerY, centerZ);
-                group.add(mesh);
+            var bestPos = findNearestNonOverlappingSpot(safeX, safeZ, w, d, h, ignoreBoxId);
+            if (bestPos) {
+                return { x: bestPos.x, y: bestPos.y, z: bestPos.z, collided: true };
+            }
 
-                var badge = createTwoDigitBadgeSprite(box.tagId, box.partName);
-                badge.position.set(centerX, box.y + box.h + 6.5, centerZ);
-                badge.scale.set(28, 8.75, 1);
-                group.add(badge);
+            var fbX = fallbackCoords ? Math.max(0, Math.min(LOCKER_SIZE - w, fallbackCoords.x)) : 0;
+            var fbZ = fallbackCoords ? Math.max(0, Math.min(LOCKER_SIZE - d, fallbackCoords.z)) : 0;
+            var fbY = computeRestingElevation(fbX, fbZ, w, d, h, ignoreBoxId);
+            return { x: fbX, y: fbY, z: fbZ, collided: true };
+        }
 
-                boxesGroup.add(group);
-                boxMeshes[box.id] = group;
+        function findNearestNonOverlappingSpot(targetX, targetZ, w, d, h, ignoreBoxId) {
+            var step = 2;
+            var bestCandidate = null;
+            var bestDist = Infinity;
+
+            for (var gz = 0; gz <= LOCKER_SIZE - d; gz += step) {
+                for (var gx = 0; gx <= LOCKER_SIZE - w; gx += step) {
+                    var gy = computeRestingElevation(gx, gz, w, d, h, ignoreBoxId);
+                    var cand = { x: gx, y: gy, z: gz, w: w, d: d, h: h };
+                    if (isValidPlacement(cand, ignoreBoxId)) {
+                        var dist = Math.hypot(gx - targetX, gz - targetZ);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestCandidate = { x: gx, y: gy, z: gz };
+                        }
+                    }
+                }
+            }
+
+            return bestCandidate;
+        }
+
+        function applyGravityToAllBoxes() {
+            var movedBoxes = [];
+            var changed = true;
+            var guard = 0;
+
+            while (changed && guard < 25) {
+                changed = false;
+                guard++;
+
+                for (var i = 0; i < boxes.length; i++) {
+                    var box = boxes[i];
+                    var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+                    if (supportY < box.y) {
+                        var candidate = { x: box.x, y: supportY, z: box.z, w: box.w, d: box.d, h: box.h };
+                        if (isValidPlacement(candidate, box.id)) {
+                            box.y = Math.max(0, supportY);
+                            changed = true;
+                            if (movedBoxes.indexOf(box) === -1) {
+                                movedBoxes.push(box);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return movedBoxes;
+        }
+
+        function findSmartPosition(w, d, h, ignoreBoxId) {
+            var step = 6;
+
+            for (var z = 4; z <= LOCKER_SIZE - d; z += step) {
+                for (var x = 4; x <= LOCKER_SIZE - w; x += step) {
+                    var candidate = { x: x, y: 0, z: z, w: w, d: d, h: h };
+                    if (isValidPlacement(candidate, ignoreBoxId)) {
+                        return { x: x, y: 0, z: z };
+                    }
+                }
+            }
+
+            for (var i = 0; i < boxes.length; i++) {
+                var base = boxes[i];
+                if (base.id === ignoreBoxId) continue;
+                var stackY = base.y + base.h;
+                if (stackY + h <= LOCKER_SIZE && base.x + w <= LOCKER_SIZE && base.z + d <= LOCKER_SIZE) {
+                    var stackCand = { x: base.x, y: stackY, z: base.z, w: w, d: d, h: h };
+                    if (isValidPlacement(stackCand, ignoreBoxId)) {
+                        return { x: base.x, y: stackY, z: base.z };
+                    }
+                }
+            }
+
+            return { x: 0, y: 0, z: 0 };
+        }
+
+        function setDimensionUnit(unit) {
+            dimensionUnit = unit;
+            var inBtn = document.getElementById('unit-in-btn');
+            var ftBtn = document.getElementById('unit-ft-btn');
+            var label = document.getElementById('dim-unit-label');
+            var wInput = document.getElementById('new-w');
+            var dInput = document.getElementById('new-d');
+            var hInput = document.getElementById('new-h');
+
+            if (unit === 'ft') {
+                inBtn.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white';
+                ftBtn.className = 'px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold';
+                label.textContent = 'feet';
+                wInput.step = '0.25'; dInput.step = '0.25'; hInput.step = '0.25';
+                wInput.max = '10'; dInput.max = '10'; hInput.max = '10';
+                wInput.value = '2'; dInput.value = '1.5'; hInput.value = '1.5';
+            } else {
+                ftBtn.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white';
+                inBtn.className = 'px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold';
+                label.textContent = 'inches';
+                wInput.step = 'any'; dInput.step = 'any'; hInput.step = 'any';
+                wInput.max = '120'; dInput.max = '120'; hInput.max = '120';
+                wInput.value = '24'; dInput.value = '18'; hInput.value = '18';
             }
         }
 
-        function setCameraView(view) {
-            document.querySelectorAll('.cam-btn').forEach(function(btn) {
-                if (btn.dataset.view === view) {
-                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition';
+        function selectColor(hex) {
+            document.getElementById('new-color').value = hex;
+            document.querySelectorAll('.color-swatch').forEach(function(btn) {
+                if (btn.dataset.color === hex) {
+                    btn.className = 'color-swatch w-6 h-6 rounded-full ring-2 ring-white scale-110 transition';
                 } else {
-                    btn.className = 'cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
+                    btn.className = 'color-swatch w-6 h-6 rounded-full opacity-70 hover:opacity-100 transition';
                 }
+                btn.style.backgroundColor = btn.dataset.color;
             });
+        }
 
-            switch (view) {
-                case 'iso':
-                    camera.position.set(170, 160, 190);
-                    controls.target.set(0, 50, 0);
-                    break;
-                case 'front':
-                    camera.position.set(0, 65, 225);
-                    controls.target.set(0, 55, 0);
-                    break;
-                case 'top':
-                    camera.position.set(0, 240, 15);
-                    controls.target.set(0, 0, 0);
-                    break;
-                case 'interior':
-                    camera.position.set(0, 62, 56);
-                    controls.target.set(0, 48, -20);
-                    break;
+        function toggleManualCoords(isAuto) {
+            var manualDiv = document.getElementById('manual-coords-fields');
+            if (isAuto) {
+                manualDiv.classList.add('hidden');
+            } else {
+                manualDiv.classList.remove('hidden');
             }
-            controls.update();
         }
 
-        function focusCameraOnBox(box) {
-            var worldX = box.x + (box.w / 2) - (LOCKER_SIZE / 2);
-            var worldY = box.y + (box.h / 2);
-            var worldZ = box.z + (box.d / 2) - (LOCKER_SIZE / 2);
+        function handleAddBox(event) {
+            event.preventDefault();
 
-            controls.target.set(worldX, worldY, worldZ);
-            camera.position.set(worldX + 85, Math.min(180, worldY + 75), worldZ + 95);
-            controls.update();
+            var tagId = document.getElementById('new-tag').value.trim().toUpperCase().slice(0, 2) || '00';
+            var partName = document.getElementById('new-name').value.trim();
+            var partDescription = document.getElementById('new-desc').value.trim();
+            var color = document.getElementById('new-color').value || '#38bdf8';
+
+            var rawW = parseFloat(document.getElementById('new-w').value);
+            var rawD = parseFloat(document.getElementById('new-d').value);
+            var rawH = parseFloat(document.getElementById('new-h').value);
+
+            var mult = dimensionUnit === 'ft' ? 12 : 1;
+            var w = Math.round(rawW * mult);
+            var d = Math.round(rawD * mult);
+            var h = Math.round(rawH * mult);
+
+            if (isNaN(w) || isNaN(d) || isNaN(h) || w < 1 || d < 1 || h < 1) {
+                showToast('Please enter valid positive dimensions.', 'error');
+                return;
+            }
+            if (w > LOCKER_SIZE || d > LOCKER_SIZE || h > LOCKER_SIZE) {
+                showToast('Box exceeds 10ft (120") locker limits.', 'error');
+                return;
+            }
+
+            var isAuto = document.getElementById('auto-place-check').checked;
+            var pos = { x: 0, y: 0, z: 0 };
+
+            if (isAuto) {
+                pos = findSmartPosition(w, d, h, null);
+            } else {
+                var reqX = Math.max(0, Math.min(LOCKER_SIZE - w, parseInt(document.getElementById('new-x').value, 10) || 0));
+                var reqZ = Math.max(0, Math.min(LOCKER_SIZE - d, parseInt(document.getElementById('new-z').value, 10) || 0));
+                var resolved = resolveCollisionAndStack(reqX, reqZ, w, d, h, null, { x: reqX, y: 0, z: reqZ });
+                pos.x = resolved.x;
+                pos.z = resolved.z;
+                pos.y = resolved.y;
+            }
+
+            var newBox = {
+                id: 'box-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                tagId: tagId,
+                partName: partName,
+                partDescription: partDescription,
+                w: w,
+                d: d,
+                h: h,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                color: color
+            };
+
+            boxes.push(newBox);
+            cloudUpsertBox(newBox);
+            recordActivity('Self (Lead Tech)', 'Added Box to Locker', newBox.tagId, newBox.partName, 'Placed at X:' + pos.x + '" Y:' + pos.y + '" Z:' + pos.z + '"');
+
+            closeModal('modal-add');
+            document.getElementById('add-box-form').reset();
+            selectColor('#38bdf8');
+            toggleManualCoords(true);
+
+            selectBox(newBox.id, false);
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            showToast('Placed Box #' + newBox.tagId + ' (' + newBox.partName + ') in locker.', 'success');
         }
 
-        function selectBox(id, shouldFocusCamera) {
-            selectedBoxId = id;
-            var box = boxes.find(function(b) { return b.id === id; });
+        function selectBox(boxId, focusCamera) {
+            selectedBoxId = boxId;
+            var box = boxes.find(function(b) { return b.id === boxId; });
+            if (!box) {
+                deselectBox();
+                return;
+            }
+
+            refreshInspectorUI();
+            openModal('modal-inspector');
+            syncBoxesTo3D();
+            renderInventoryList();
+
+            if (focusCamera) {
+                var half = LOCKER_SIZE / 2;
+                var cx = box.x + box.w / 2 - half;
+                var cy = box.y + box.h / 2;
+                var cz = box.z + box.d / 2 - half;
+                controls.target.set(cx, cy, cz);
+                camera.position.set(cx + 85, cy + 70, cz + 95);
+                controls.update();
+            }
+        }
+
+        function deselectBox() {
+            selectedBoxId = null;
+            closeModal('modal-inspector');
+            syncBoxesTo3D();
+            renderInventoryList();
+        }
+
+        function refreshInspectorUI() {
+            var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            document.getElementById('insp-tag-badge').textContent = '#' + box.tagId;
+            document.getElementById('insp-tag-badge').textContent = '#' + (box.tagId || '00');
             document.getElementById('insp-name').textContent = box.partName;
-            document.getElementById('insp-badge').textContent = 'Locker Storage';
-
-            document.getElementById('insp-edit-tag').value = box.tagId;
+            document.getElementById('insp-edit-tag').value = box.tagId || '';
             document.getElementById('insp-edit-name').value = box.partName;
             document.getElementById('insp-edit-desc').value = box.partDescription || '';
-
             document.getElementById('insp-dims-label').textContent = box.w + '"W × ' + box.d + '"D × ' + box.h + '"H';
 
             var xSlider = document.getElementById('insp-x');
@@ -1556,42 +1720,26 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             document.getElementById('insp-x-val').textContent = box.x + '"';
             document.getElementById('insp-z-val').textContent = box.z + '"';
             document.getElementById('insp-y-val').textContent = box.y + '"';
-
-            if (shouldFocusCamera) {
-                focusCameraOnBox(box);
-            }
-
-            openModal('modal-inspector');
-            syncBoxesTo3D();
-            renderInventoryList();
-        }
-
-        function deselectBox() {
-            selectedBoxId = null;
-            closeModal('modal-inspector');
-            syncBoxesTo3D();
-            renderInventoryList();
         }
 
         function updateSelectedMeta() {
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            var cleanTag = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 2) || '00';
-            var cleanName = document.getElementById('insp-edit-name').value.trim() || box.partName;
-            var cleanDesc = document.getElementById('insp-edit-desc').value.trim();
+            var newTag = document.getElementById('insp-edit-tag').value.trim().toUpperCase().slice(0, 2) || '00';
+            var newName = document.getElementById('insp-edit-name').value.trim() || box.partName;
+            var newDesc = document.getElementById('insp-edit-desc').value.trim();
 
-            box.tagId = cleanTag;
-            box.partName = cleanName;
-            box.partDescription = cleanDesc;
+            box.tagId = newTag;
+            box.partName = newName;
+            box.partDescription = newDesc;
 
-            document.getElementById('insp-tag-badge').textContent = '#' + cleanTag;
-            document.getElementById('insp-name').textContent = cleanName;
+            document.getElementById('insp-tag-badge').textContent = '#' + newTag;
+            document.getElementById('insp-name').textContent = newName;
 
             cloudUpsertBox(box);
             syncBoxesTo3D();
             renderInventoryList();
-            updateStats();
         }
 
         function moveSelectedBox(axis, val) {
@@ -1602,13 +1750,31 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var maxVal = axis === 'x' ? LOCKER_SIZE - box.w : axis === 'z' ? LOCKER_SIZE - box.d : LOCKER_SIZE - box.h;
             var clamped = Math.max(0, Math.min(maxVal, numVal));
 
+            var prev = { x: box.x, y: box.y, z: box.z };
             box[axis] = clamped;
+
             if (axis === 'x' || axis === 'z') {
-                box.y = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+                var resolved = resolveCollisionAndStack(box.x, box.z, box.w, box.d, box.h, box.id, prev);
+                box.x = resolved.x;
+                box.z = resolved.z;
+                box.y = resolved.y;
+
+                document.getElementById('insp-x').value = box.x;
+                document.getElementById('insp-z').value = box.z;
+                document.getElementById('insp-y').value = box.y;
+                document.getElementById('insp-x-val').textContent = box.x + '"';
+                document.getElementById('insp-z-val').textContent = box.z + '"';
+                document.getElementById('insp-y-val').textContent = box.y + '"';
+            } else {
+                var minStackY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+                var cand = { x: box.x, y: clamped, z: box.z, w: box.w, d: box.d, h: box.h };
+                if (clamped < minStackY || !isValidPlacement(cand, box.id)) {
+                    box.y = minStackY;
+                }
                 document.getElementById('insp-y').value = box.y;
                 document.getElementById('insp-y-val').textContent = box.y + '"';
             }
-            document.getElementById('insp-' + axis + '-val').textContent = clamped + '"';
+
             syncBoxesTo3D();
         }
 
@@ -1618,191 +1784,81 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var settled = applyGravityToAllBoxes();
             if (settled.indexOf(box) === -1) settled.push(box);
             cloudUpsertManyBoxes(settled);
-            syncBoxesTo3D();
+            refreshInspectorUI();
             renderInventoryList();
+            updateStats();
         }
 
         function rotateSelectedBox() {
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            var newW = box.d;
-            var newD = box.w;
+            var prevW = box.w;
+            var prevD = box.d;
+            var prevX = box.x;
+            var prevZ = box.z;
+            var prevY = box.y;
 
-            box.w = newW;
-            box.d = newD;
-            box.x = Math.min(box.x, LOCKER_SIZE - box.w);
-            box.z = Math.min(box.z, LOCKER_SIZE - box.d);
+            box.w = prevD;
+            box.d = prevW;
+
+            var resolved = resolveCollisionAndStack(box.x, box.z, box.w, box.d, box.h, box.id, { x: prevX, y: prevY, z: prevZ });
+            box.x = resolved.x;
+            box.z = resolved.z;
+            box.y = resolved.y;
 
             var settled = applyGravityToAllBoxes();
             if (settled.indexOf(box) === -1) settled.push(box);
+
             cloudUpsertManyBoxes(settled);
-            selectBox(box.id, false);
-            showToast('Rotated Box #' + box.tagId + ' 90°', 'info');
+            refreshInspectorUI();
+            syncBoxesTo3D();
+            renderInventoryList();
+            showToast('Rotated Box #' + box.tagId + ' 90°.', 'info');
         }
 
         function autoStackSelectedBox() {
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            var pos = findSmartPosition(box.w, box.d, box.h, box.id);
-            box.x = pos.x;
-            box.y = pos.y;
-            box.z = pos.z;
+            var spot = findSmartPosition(box.w, box.d, box.h, box.id);
+            box.x = spot.x;
+            box.y = spot.y;
+            box.z = spot.z;
 
             var settled = applyGravityToAllBoxes();
             if (settled.indexOf(box) === -1) settled.push(box);
+
             cloudUpsertManyBoxes(settled);
-            selectBox(box.id, true);
-            showToast('Snapped #' + box.tagId + ' to X:' + pos.x + '" Y:' + pos.y + '" Z:' + pos.z + '"', 'success');
+            refreshInspectorUI();
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            showToast('Auto-placed Box #' + box.tagId + ' at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '".', 'success');
         }
 
         function deleteSelectedBox() {
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
-            addActivityLog('Self (Lead Tech)', 'Removed Box', box.tagId, box.partName, 'Removed from 3D locker.');
-            var deletedId = box.id;
-            boxes = boxes.filter(function(b) { return b.id !== deletedId; });
+            var removedId = box.id;
+            var removedTag = box.tagId;
+            var removedName = box.partName;
+
+            boxes = boxes.filter(function(b) { return b.id !== removedId; });
+            deselectBox();
 
             var droppedBoxes = applyGravityToAllBoxes();
-
-            deselectBox();
-            cloudDeleteBox(deletedId);
+            cloudDeleteBox(removedId);
             if (droppedBoxes.length > 0) {
                 cloudUpsertManyBoxes(droppedBoxes);
             }
+
+            recordActivity('Self (Lead Tech)', 'Removed Box from Locker', removedTag, removedName, 'Deleted from locker');
             syncBoxesTo3D();
             renderInventoryList();
             updateStats();
-            showToast(
-                droppedBoxes.length > 0
-                    ? 'Removed #' + box.tagId + ' (' + droppedBoxes.length + ' stacked box dropped down)'
-                    : 'Removed Box #' + box.tagId + ' (' + box.partName + ')',
-                'info'
-            );
-        }
-
-        function suggestNextTwoDigitId() {
-            var used = {};
-            boxes.forEach(function(b) { used[String(b.tagId).toUpperCase()] = true; });
-            for (var i = 1; i <= 99; i++) {
-                var candidate = i < 10 ? '0' + i : String(i);
-                if (!used[candidate]) return candidate;
-            }
-            return '01';
-        }
-
-        function setDimensionUnit(unit) {
-            dimensionUnit = unit;
-            var inBtn = document.getElementById('unit-in-btn');
-            var ftBtn = document.getElementById('unit-ft-btn');
-            var label = document.getElementById('dim-unit-label');
-
-            var wInput = document.getElementById('new-w');
-            var dInput = document.getElementById('new-d');
-            var hInput = document.getElementById('new-h');
-
-            if (unit === 'ft') {
-                inBtn.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white';
-                ftBtn.className = 'px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold';
-                label.textContent = 'feet';
-                wInput.max = 10; dInput.max = 10; hInput.max = 10;
-                wInput.value = +(parseFloat(wInput.value) / 12).toFixed(2);
-                dInput.value = +(parseFloat(dInput.value) / 12).toFixed(2);
-                hInput.value = +(parseFloat(hInput.value) / 12).toFixed(2);
-            } else {
-                ftBtn.className = 'px-2 py-0.5 rounded text-slate-400 hover:text-white';
-                inBtn.className = 'px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold';
-                label.textContent = 'inches';
-                wInput.max = 120; dInput.max = 120; hInput.max = 120;
-                wInput.value = Math.round(parseFloat(wInput.value) * 12);
-                dInput.value = Math.round(parseFloat(dInput.value) * 12);
-                hInput.value = Math.round(parseFloat(hInput.value) * 12);
-            }
-        }
-
-        function toggleManualCoords(isAuto) {
-            var fields = document.getElementById('manual-coords-fields');
-            if (isAuto) {
-                fields.classList.add('hidden');
-            } else {
-                fields.classList.remove('hidden');
-            }
-        }
-
-        function selectColor(hex) {
-            document.getElementById('new-color').value = hex;
-            document.querySelectorAll('.color-swatch').forEach(function(btn) {
-                if (btn.dataset.color === hex) {
-                    btn.classList.add('ring-2', 'ring-white', 'opacity-100');
-                    btn.classList.remove('opacity-70');
-                } else {
-                    btn.classList.remove('ring-2', 'ring-white', 'opacity-100');
-                    btn.classList.add('opacity-70');
-                }
-            });
-        }
-
-        function handleAddBox(event) {
-            event.preventDefault();
-
-            var rawTag = document.getElementById('new-tag').value.trim().toUpperCase();
-            var tagId = rawTag.length === 1 ? '0' + rawTag : rawTag.slice(0, 2);
-            var partName = document.getElementById('new-name').value.trim();
-            var partDescription = document.getElementById('new-desc').value.trim();
-            var color = document.getElementById('new-color').value;
-
-            var rawW = parseFloat(document.getElementById('new-w').value);
-            var rawD = parseFloat(document.getElementById('new-d').value);
-            var rawH = parseFloat(document.getElementById('new-h').value);
-
-            if (dimensionUnit === 'ft') {
-                rawW *= 12;
-                rawD *= 12;
-                rawH *= 12;
-            }
-
-            var w = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawW)));
-            var d = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawD)));
-            var h = Math.max(2, Math.min(LOCKER_SIZE, Math.round(rawH)));
-
-            var isAuto = document.getElementById('auto-place-check').checked;
-            var pos = { x: 0, y: 0, z: 0 };
-
-            if (isAuto) {
-                pos = findSmartPosition(w, d, h, null);
-            } else {
-                pos.x = Math.max(0, Math.min(LOCKER_SIZE - w, parseInt(document.getElementById('new-x').value, 10) || 0));
-                pos.z = Math.max(0, Math.min(LOCKER_SIZE - d, parseInt(document.getElementById('new-z').value, 10) || 0));
-                pos.y = computeRestingElevation(pos.x, pos.z, w, d, h, null);
-            }
-
-            var newBox = {
-                id: 'box-' + Date.now(),
-                tagId: tagId,
-                partName: partName,
-                partDescription: partDescription,
-                w: w, d: d, h: h,
-                x: pos.x,
-                y: pos.y,
-                z: pos.z,
-                color: color
-            };
-
-            boxes.push(newBox);
-            addActivityLog('Self (Lead Tech)', 'Added Box', tagId, partName, 'Placed at X:' + pos.x + '" Y:' + pos.y + '" Z:' + pos.z + '"');
-
-            cloudUpsertBox(newBox);
-            syncBoxesTo3D();
-            renderInventoryList();
-            updateStats();
-            closeModal('modal-add');
-            focusCameraOnBox(newBox);
-
-            document.getElementById('new-name').value = '';
-            document.getElementById('new-desc').value = '';
-            showToast('Placed Box #' + tagId + ' (' + partName + ') in locker', 'success');
+            showToast('Removed Box #' + removedTag + ' (' + removedName + ').', 'warning');
         }
 
         function submitBoxActivityLog() {
@@ -1813,173 +1869,155 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var action = document.getElementById('log-action-select').value;
             var note = document.getElementById('log-note-input').value.trim();
 
-            if (action === 'Picked Up & Removed Box') {
-                addActivityLog(tech, action, box.tagId, box.partName, note || 'Picked up item from locker.');
-                var deletedId = box.id;
-                boxes = boxes.filter(function(b) { return b.id !== deletedId; });
-                var droppedBoxes = applyGravityToAllBoxes();
+            recordActivity(tech, action, box.tagId, box.partName, note || 'Field update');
+            document.getElementById('log-note-input').value = '';
+
+            if (action.indexOf('Removed') !== -1) {
+                var removedId = box.id;
+                boxes = boxes.filter(function(b) { return b.id !== removedId; });
                 deselectBox();
-                cloudDeleteBox(deletedId);
-                if (droppedBoxes.length > 0) {
-                    cloudUpsertManyBoxes(droppedBoxes);
-                }
+                var droppedBoxes = applyGravityToAllBoxes();
+                cloudDeleteBox(removedId);
+                if (droppedBoxes.length > 0) cloudUpsertManyBoxes(droppedBoxes);
                 syncBoxesTo3D();
                 renderInventoryList();
                 updateStats();
-                showToast(tech + ' picked up Box #' + box.tagId, 'warning');
-                return;
             }
 
-            addActivityLog(tech, action, box.tagId, box.partName, note);
-            document.getElementById('log-note-input').value = '';
-            showToast('Logged: ' + tech + ' — ' + action + ' (#' + box.tagId + ')', 'success');
+            showToast('Logged ' + action + ' by ' + tech + '.', 'success');
         }
 
-        function addActivityLog(tech, action, tagId, partName, note) {
+        function recordActivity(tech, action, tagId, partName, note) {
             var now = new Date();
-            var timestamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
-                            now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            var timeStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+                          now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             var entry = {
-                id: 'log-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-                timestamp: timestamp,
+                id: 'log-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+                time: timeStr,
                 tech: tech,
                 action: action,
                 tagId: tagId || '--',
                 partName: partName,
-                note: note
+                note: note || ''
             };
 
             activityLogs.unshift(entry);
-            if (activityLogs.length > 50) activityLogs.pop();
-            cloudInsertLog(entry);
-            renderActivityLogs();
-        }
+            if (activityLogs.length > 100) activityLogs.pop();
 
-        function clearLogs() {
-            activityLogs = [];
-            if (isSupabaseConnected && supabaseClient) {
-                supabaseClient.from(LOGS_TABLE).delete().neq('id', '').then(function(res) {
-                    if (res.error) console.error('Cloud clear logs error:', res.error);
-                });
+            cloudInsertLog(entry);
+            if (!document.getElementById('modal-logs').classList.contains('hidden')) {
+                renderActivityLogs();
             }
-            renderActivityLogs();
         }
 
         function renderActivityLogs() {
             var container = document.getElementById('activity-log-list');
-            if (!container) return;
-            if (activityLogs.length === 0) {
-                container.innerHTML = '<div class="text-center text-xs text-slate-500 py-8">No technician activity logged yet.</div>';
+            if (!activityLogs || activityLogs.length === 0) {
+                container.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">No technician or 3rd-party activity logged yet.</div>';
                 return;
             }
 
-            container.innerHTML = activityLogs.map(function(log) {
-                var is3P = log.tech.indexOf('3rd-Party') !== -1;
-                var badgeClass = is3P
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                    : 'bg-sky-500/20 text-sky-300 border-sky-500/30';
+            container.innerHTML = activityLogs.map(function(item) {
+                var isThirdParty = (item.tech || '').indexOf('3rd-Party') !== -1;
+                var badgeClass = isThirdParty
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
 
                 return (
-                    '<div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1">' +
+                    '<div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1">' +
                         '<div class="flex items-center justify-between gap-2">' +
-                            '<div class="flex items-center gap-1.5">' +
-                                '<span class="px-2 py-0.5 rounded text-[10px] font-bold border ' + badgeClass + '">' + escapeHTML(log.tech) + '</span>' +
-                                '<span class="font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">#' + escapeHTML(log.tagId || '--') + '</span>' +
-                            '</div>' +
-                            '<span class="font-mono text-[10px] text-slate-500">' + escapeHTML(log.timestamp) + '</span>' +
+                            '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + badgeClass + '">' + escapeHtml(item.tech) + '</span>' +
+                            '<span class="text-[10px] font-mono text-slate-500">' + escapeHtml(item.time) + '</span>' +
                         '</div>' +
-                        '<div class="font-semibold text-slate-200">' +
-                            escapeHTML(log.action) + ': <span class="text-white">' + escapeHTML(log.partName) + '</span>' +
+                        '<div class="font-medium text-slate-200">' +
+                            '<span class="font-mono font-bold text-amber-400 mr-1">#' + escapeHtml(item.tagId) + '</span>' +
+                            escapeHtml(item.action) + ': <span class="text-white font-semibold">' + escapeHtml(item.partName) + '</span>' +
                         '</div>' +
-                        (log.note ? '<p class="text-[11px] text-slate-400 italic">"' + escapeHTML(log.note) + '"</p>' : '') +
+                        (item.note ? '<div class="text-[11px] text-slate-400 italic">"' + escapeHtml(item.note) + '"</div>' : '') +
                     '</div>'
                 );
             }).join('');
         }
 
-        function openModal(id) {
-            if (id === 'modal-add') {
-                document.getElementById('new-tag').value = suggestNextTwoDigitId();
+        function clearLogs() {
+            activityLogs = [];
+            renderActivityLogs();
+            if (supabaseClient && isSupabaseConnected) {
+                supabaseClient.from(LOGS_TABLE).delete().neq('id', '').then(function() {});
             }
-            document.getElementById(id).classList.remove('hidden');
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.add('hidden');
+            showToast('Activity log cleared.', 'info');
         }
 
         function renderInventoryList() {
-            var listEl = document.getElementById('inventory-list');
-            var query = document.getElementById('search-input').value.toLowerCase().trim();
-
-            var filtered = boxes.filter(function(b) {
-                return !query ||
-                    (b.tagId && b.tagId.toLowerCase().indexOf(query) !== -1) ||
-                    (b.partName && b.partName.toLowerCase().indexOf(query) !== -1) ||
-                    (b.partDescription && b.partDescription.toLowerCase().indexOf(query) !== -1);
-            });
-
-            filtered.sort(function(a, b) {
-                return String(a.tagId).localeCompare(String(b.tagId));
-            });
-
+            var query = (document.getElementById('search-input').value || '').toLowerCase().trim();
+            var container = document.getElementById('inventory-list');
             document.getElementById('tab-inv-count').textContent = boxes.length;
 
+            var filtered = boxes.filter(function(b) {
+                if (!query) return true;
+                return (
+                    (b.tagId && b.tagId.toLowerCase().indexOf(query) !== -1) ||
+                    (b.partName && b.partName.toLowerCase().indexOf(query) !== -1) ||
+                    (b.partDescription && b.partDescription.toLowerCase().indexOf(query) !== -1)
+                );
+            });
+
             if (filtered.length === 0) {
-                listEl.innerHTML = '<div class="text-center py-8 px-4 border border-dashed border-slate-800 rounded-xl"><p class="text-xs text-slate-400">No inventory boxes match your filter.</p></div>';
+                container.innerHTML =
+                    '<div class="text-center py-10 px-4 text-slate-500 text-xs space-y-2">' +
+                        '<p>' + (isSupabaseConnected ? 'No matching boxes found in locker.' : 'Connect to Supabase (Sync / SQL) to load live locker inventory.') + '</p>' +
+                    '</div>';
                 return;
             }
 
-            listEl.innerHTML = filtered.map(function(box) {
+            container.innerHTML = filtered.map(function(box) {
                 var isSelected = box.id === selectedBoxId;
-                var borderClass = isSelected
-                    ? 'border-sky-500 bg-slate-800/80'
-                    : 'border-slate-800 bg-slate-950/70 hover:border-slate-700 hover:bg-slate-900';
+                var activeClass = isSelected
+                    ? 'bg-slate-800/90 border-sky-500 ring-1 ring-sky-500/40'
+                    : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700 hover:bg-slate-950';
 
                 return (
-                    '<div onclick="selectBox(\'' + box.id + '\', true)" class="cursor-pointer border ' + borderClass + ' rounded-xl p-2.5 transition flex items-start justify-between gap-2.5">' +
-                        '<div class="flex items-start gap-2.5 min-w-0">' +
-                            '<div class="flex flex-col items-center shrink-0">' +
-                                '<span class="font-mono font-extrabold text-xs px-2 py-1 rounded-md bg-amber-500 text-slate-950 shadow">#' + escapeHTML(box.tagId) + '</span>' +
-                                '<span class="w-full h-1 rounded-full mt-1" style="background-color: ' + box.color + '"></span>' +
+                    '<div onclick="selectBox(\'' + box.id + '\', true)" class="cursor-pointer border ' + activeClass + ' rounded-xl p-2.5 transition space-y-1.5">' +
+                        '<div class="flex items-start justify-between gap-2">' +
+                            '<div class="flex items-center gap-2 min-w-0">' +
+                                '<span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-amber-500 text-slate-950 shrink-0">#' + escapeHtml(box.tagId || '00') + '</span>' +
+                                '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color:' + escapeHtml(box.color || '#38bdf8') + '"></span>' +
+                                '<span class="font-bold text-xs text-white truncate">' + escapeHtml(box.partName) + '</span>' +
                             '</div>' +
-                            '<div class="min-w-0">' +
-                                '<div class="font-bold text-xs text-white truncate">' + escapeHTML(box.partName) + '</div>' +
-                                '<p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">' + escapeHTML(box.partDescription || 'No description') + '</p>' +
-                                '<div class="flex items-center gap-1.5 mt-1 text-[10px] font-mono text-slate-500">' +
-                                    '<span>' + box.w + '×' + box.d + '×' + box.h + '"</span>' +
-                                    '<span>•</span>' +
-                                    '<span>X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"</span>' +
-                                '</div>' +
-                            '</div>' +
+                            '<span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800 shrink-0">' + box.w + '×' + box.d + '×' + box.h + '"</span>' +
                         '</div>' +
-                        '<span class="text-[10px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">1 Box</span>' +
+                        (box.partDescription ? '<p class="text-[11px] text-slate-400 line-clamp-1 pl-1">' + escapeHtml(box.partDescription) + '</p>' : '') +
+                        '<div class="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-0.5 pl-1">' +
+                            '<span>X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"</span>' +
+                            '<span class="text-emerald-400 font-semibold">1 Item</span>' +
+                        '</div>' +
                     '</div>'
                 );
             }).join('');
         }
 
         function updateStats() {
-            var totalBoxes = boxes.length;
-            var totalCubicInches = 0;
-
+            var totalVolCuIn = 0;
             boxes.forEach(function(b) {
-                totalCubicInches += (b.w * b.d * b.h);
+                totalVolCuIn += (b.w * b.d * b.h);
             });
 
-            var cubicFeet = totalCubicInches / 1728;
-            var percentUsed = ((cubicFeet / 1000) * 100).toFixed(1);
+            var lockerVolCuIn = LOCKER_SIZE * LOCKER_SIZE * LOCKER_SIZE;
+            var usedCuFt = totalVolCuIn / 1728;
+            var totalCuFt = lockerVolCuIn / 1728;
+            var pct = Math.min(100, Math.round((totalVolCuIn / lockerVolCuIn) * 100));
 
-            document.getElementById('stat-boxes').textContent = totalBoxes;
-            document.getElementById('stat-volume').textContent = cubicFeet.toFixed(1) + ' / 1,000 ft³';
-            document.getElementById('stat-percent').textContent = percentUsed + '%';
+            document.getElementById('stat-boxes').textContent = boxes.length;
+            document.getElementById('stat-volume').textContent = usedCuFt.toFixed(1) + ' / ' + Math.round(totalCuFt).toLocaleString() + ' ft³';
+            document.getElementById('stat-percent').textContent = pct + '%';
         }
 
         function exportData() {
             var payload = {
                 exportedAt: new Date().toISOString(),
-                lockerDimensionsInches: { w: 120, d: 120, h: 120 },
+                table: INVENTORY_TABLE,
+                lockerDimensionsInches: { w: LOCKER_SIZE, d: LOCKER_SIZE, h: LOCKER_SIZE },
                 boxes: boxes,
                 activityLogs: activityLogs
             };
@@ -1987,10 +2025,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'lockergrid-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+            a.download = 'KelownaInventory-backup-' + new Date().toISOString().slice(0, 10) + '.json';
             a.click();
             URL.revokeObjectURL(url);
-            showToast('Exported JSON locker backup', 'success');
+            showToast('Exported locker inventory JSON backup.', 'success');
         }
 
         function confirmResetDemo() {
@@ -2002,77 +2040,50 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";</pr
         }
 
         function executeResetDemo() {
-            if (!isSupabaseConnected || !supabaseClient) {
-                showToast('Connect to Supabase first to reset cloud inventory', 'warning');
-                closeConfirmModal();
-                return;
+            closeConfirmModal();
+            boxes = DEFAULT_BOXES.map(function(b) { return Object.assign({}, b); });
+            applyGravityToAllBoxes();
+            deselectBox();
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+
+            if (supabaseClient && isSupabaseConnected) {
+                supabaseClient.from(INVENTORY_TABLE).delete().neq('id', '').then(function() {
+                    cloudUpsertManyBoxes(boxes);
+                });
             }
-            var sampleRows = DEFAULT_BOXES.map(mapBoxToDbRow);
-            supabaseClient.from(INVENTORY_TABLE).delete().neq('id', '').then(function() {
-                return supabaseClient.from(INVENTORY_TABLE).upsert(sampleRows);
-            }).then(function(res) {
-                if (res && res.error) {
-                    showToast('Reset failed: ' + res.error.message, 'error');
-                } else {
-                    deselectBox();
-                    showToast('Reset KelownaInventory to sample items', 'info');
-                }
-                closeConfirmModal();
-            });
+
+            showToast('Reset locker to sample layout.', 'info');
         }
 
-        var toastTimeout;
-        function showToast(msg, type) {
-            var banner = document.getElementById('toast-banner');
-            var msgEl = document.getElementById('toast-msg');
-            msgEl.textContent = msg;
-
-            var styles = {
-                success: 'bg-emerald-950/90 border-emerald-700/70 text-emerald-200',
-                warning: 'bg-amber-950/90 border-amber-700/70 text-amber-200',
-                error: 'bg-rose-950/90 border-rose-700/70 text-rose-200',
-                info: 'bg-sky-950/90 border-sky-700/70 text-sky-200'
-            };
-
-            banner.className = 'mx-3 mt-2.5 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between border shrink-0 ' + (styles[type] || styles.info);
-            banner.classList.remove('hidden');
-
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(hideToast, 3500);
-        }
-
-        function hideToast() {
-            document.getElementById('toast-banner').classList.add('hidden');
-        }
-
-        function escapeHTML(str) {
+        function escapeHtml(str) {
             if (!str) return '';
             return String(str)
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
-        function onWindowResize() {
-            var container = document.getElementById('canvas-container');
-            if (!container || !renderer || !camera) return;
-            var width = container.clientWidth;
-            var height = container.clientHeight;
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-        }
+        window.addEventListener('DOMContentLoaded', function() {
+            if (window.lucide) lucide.createIcons();
+            initThreeJS();
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            updateSyncBadgeUI();
 
-        function animate() {
-            requestAnimationFrame(animate);
-            if (controls) controls.update();
-            if (renderer && scene && camera) {
-                renderer.render(scene, camera);
+            if (
+                SUPABASE_URL &&
+                SUPABASE_ANON_KEY &&
+                SUPABASE_URL !== 'YOUR_SUPABASE_URL' &&
+                SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY'
+            ) {
+                connectSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, false);
             }
-        }
-
-        window.onload = initApp;
+        });
     </script>
 </body>
 </html>
