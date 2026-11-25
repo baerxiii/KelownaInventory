@@ -438,12 +438,23 @@
                     <h2 class="text-sm font-bold text-white">Technician & 3rd-Party Activity Log</h2>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button type="button" onclick="toggleBackupRestoreDrawer()" class="text-[11px] bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-lg font-semibold transition">Past Backups</button>
                     <button type="button" onclick="toggleManualLogBoxForm()" class="text-[11px] bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-2 py-1 rounded-lg font-semibold transition">+ Log / Restore Box</button>
                     <button onclick="clearLogs()" class="text-[11px] text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-950/40">Clear</button>
                     <button onclick="closeModal('modal-logs')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
+            </div>
+            <div id="backup-restore-drawer" class="hidden p-3 bg-slate-950/95 border-b border-slate-800 space-y-2.5 text-xs">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">Load Dimensions &amp; Boxes from Past Backups</span>
+                    <label class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[10px] font-semibold cursor-pointer">
+                        <span>Import JSON File</span>
+                        <input type="file" accept=".json,application/json" onchange="handleBackupFileUpload(event)" class="hidden">
+                    </label>
+                </div>
+                <div id="backup-snapshots-list" class="max-h-44 overflow-y-auto space-y-1.5"></div>
             </div>
             <form id="manual-log-box-form" onsubmit="handleManualLogAndRestore(event)" class="hidden p-3 bg-slate-950/90 border-b border-slate-800 space-y-2 text-xs">
                 <div class="text-[10px] uppercase tracking-wider text-sky-400 font-semibold">Log Box Dimensions (With Optional Re-Add to Locker)</div>
@@ -2829,6 +2840,213 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             if (!document.getElementById('modal-logs').classList.contains('hidden')) {
                 renderActivityLogs();
             }
+        }
+
+        var loadedBackupSnapshots = [];
+
+        function toggleBackupRestoreDrawer() {
+            var drawer = document.getElementById('backup-restore-drawer');
+            var manualForm = document.getElementById('manual-log-box-form');
+            if (manualForm) manualForm.classList.add('hidden');
+            if (!drawer) return;
+            var willOpen = drawer.classList.contains('hidden');
+            drawer.classList.toggle('hidden');
+            if (willOpen) {
+                loadAvailableBackupSnapshots();
+            }
+        }
+
+        function loadAvailableBackupSnapshots() {
+            var listEl = document.getElementById('backup-snapshots-list');
+            if (!listEl) return;
+            listEl.innerHTML = '<div class="text-[11px] text-slate-400 py-2 text-center">Loading saved snapshots...</div>';
+
+            var combined = [];
+
+            // 1. Rolling localStorage backups
+            try {
+                var rawLocal = localStorage.getItem(LOCAL_ROLLING_BACKUP_KEY);
+                if (rawLocal) {
+                    var localArr = JSON.parse(rawLocal);
+                    if (Array.isArray(localArr)) {
+                        localArr.forEach(function(snap, idx) {
+                            if (snap && Array.isArray(snap.boxes)) {
+                                combined.push({
+                                    key: 'local_' + idx,
+                                    source: 'Browser Cache (' + (snap.backupType || 'snapshot') + ')',
+                                    time: snap.exportedAt || '',
+                                    boxes: snap.boxes
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (e) {}
+
+            // 2. Also check any BAK JSON snapshots already in activityLogs
+            activityLogs.forEach(function(logItem, idx) {
+                if (logItem && logItem.tagId === 'BAK' && logItem.note) {
+                    try {
+                        var parsed = JSON.parse(logItem.note);
+                        if (parsed && Array.isArray(parsed.boxes)) {
+                            combined.push({
+                                key: 'logbak_' + idx,
+                                source: 'Log Snapshot (' + (logItem.tech || 'Backup') + ')',
+                                time: logItem.time || '',
+                                boxes: parsed.boxes
+                            });
+                        }
+                    } catch (e) {}
+                }
+            });
+
+            // 3. Query Supabase KelownaInventoryBackups if connected
+            if (supabaseClient && isSupabaseConnected) {
+                supabaseClient
+                    .from(BACKUPS_TABLE)
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(10)
+                    .then(function(res) {
+                        if (!res.error && Array.isArray(res.data)) {
+                            res.data.forEach(function(row, idx) {
+                                var snapObj = row.snapshot_json;
+                                if (typeof snapObj === 'string') {
+                                    try { snapObj = JSON.parse(snapObj); } catch (e) { snapObj = null; }
+                                }
+                                if (snapObj && Array.isArray(snapObj.boxes)) {
+                                    combined.push({
+                                        key: 'cloud_' + (row.id || idx),
+                                        source: 'Supabase (' + (row.trigger_reason || 'backup') + ')',
+                                        time: row.created_at || '',
+                                        boxes: snapObj.boxes
+                                    });
+                                }
+                            });
+                        }
+                        renderBackupSnapshotChoices(combined);
+                    });
+            } else {
+                renderBackupSnapshotChoices(combined);
+            }
+        }
+
+        function renderBackupSnapshotChoices(snapshots) {
+            loadedBackupSnapshots = snapshots || [];
+            var listEl = document.getElementById('backup-snapshots-list');
+            if (!listEl) return;
+
+            if (loadedBackupSnapshots.length === 0) {
+                listEl.innerHTML = '<div class="text-[11px] text-slate-400 py-2 text-center">No saved snapshots found yet. You can also click "Import JSON File" above.</div>';
+                return;
+            }
+
+            listEl.innerHTML = loadedBackupSnapshots.map(function(s, i) {
+                var boxNames = (s.boxes || []).slice(0, 4).map(function(b) {
+                    return '#' + (b.tagId || '00') + ' ' + (b.partName || '') + ' (' + b.w + '×' + b.d + '×' + b.h + '")';
+                }).join(', ');
+                return (
+                    '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center justify-between gap-2">' +
+                        '<div class="min-w-0">' +
+                            '<div class="font-semibold text-emerald-300 text-[11px] truncate">' + escapeHtml(s.source) + ' • ' + (s.boxes ? s.boxes.length : 0) + ' boxes</div>' +
+                            '<div class="text-[10px] text-slate-400 font-mono truncate">' + escapeHtml(boxNames || 'Empty snapshot') + '</div>' +
+                        '</div>' +
+                        '<button type="button" onclick="openBoxesFromSnapshot(' + i + ')" class="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold shrink-0">Restore Missing</button>' +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        function openBoxesFromSnapshot(idx) {
+            var snap = loadedBackupSnapshots[idx];
+            if (!snap || !Array.isArray(snap.boxes) || snap.boxes.length === 0) {
+                showToast('Snapshot has no boxes to restore.', 'warning');
+                return;
+            }
+
+            pushUndoState('Restore from Backup Snapshot');
+            var addedCount = 0;
+            var restoredList = [];
+
+            snap.boxes.forEach(function(oldBox) {
+                var alreadyPresent = boxes.some(function(cur) {
+                    return (cur.id && oldBox.id && cur.id === oldBox.id) ||
+                           (cur.tagId && oldBox.tagId && cur.tagId.toUpperCase() === String(oldBox.tagId).toUpperCase() &&
+                            cur.partName && oldBox.partName && cur.partName.toLowerCase() === String(oldBox.partName).toLowerCase());
+                });
+                if (alreadyPresent) return;
+
+                var w = Number(oldBox.w) || 18;
+                var d = Number(oldBox.d) || 18;
+                var h = Number(oldBox.h) || 12;
+                var pos = { x: Number(oldBox.x) || 0, y: Number(oldBox.y) || 0, z: Number(oldBox.z) || 0 };
+                if (!isValidPlacement({ x: pos.x, y: pos.y, z: pos.z, w: w, d: d, h: h }, null)) {
+                    pos = findSmartPosition(w, d, h, null);
+                }
+
+                var newB = {
+                    id: generateUuid(),
+                    tagId: String(oldBox.tagId || '00').slice(0, 8),
+                    partName: oldBox.partName || 'Restored Box',
+                    partDescription: oldBox.partDescription || '',
+                    w: w,
+                    d: d,
+                    h: h,
+                    x: pos.x,
+                    y: pos.y,
+                    z: pos.z,
+                    color: oldBox.color || '#38bdf8'
+                };
+                boxes.push(newB);
+                restoredList.push(newB);
+                savePartDimensionMemory(newB.partName, newB.w, newB.d, newB.h, newB.color);
+                recordActivity('Self (Lead Tech)', 'Restored Box from Backup', newB.tagId, newB.partName, 'Loaded dimensions from past snapshot', newB);
+                addedCount++;
+            });
+
+            if (addedCount === 0) {
+                showToast('All boxes from that snapshot are already in the locker.', 'info');
+                return;
+            }
+
+            rebuildPartDimensionMemory();
+            var settled = applyGravityToAllBoxes();
+            restoredList.forEach(function(rb) {
+                if (settled.indexOf(rb) === -1) settled.push(rb);
+            });
+            cloudUpsertManyBoxes(settled);
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            renderActivityLogs();
+            showToast('Restored ' + addedCount + ' missing box(es) with saved dimensions.', 'success');
+        }
+
+        function handleBackupFileUpload(event) {
+            var file = event.target && event.target.files && event.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var parsed = JSON.parse(e.target.result);
+                    if (parsed && Array.isArray(parsed.boxes)) {
+                        loadedBackupSnapshots.unshift({
+                            key: 'file_' + Date.now(),
+                            source: 'File: ' + file.name,
+                            time: parsed.exportedAt || '',
+                            boxes: parsed.boxes
+                        });
+                        renderBackupSnapshotChoices(loadedBackupSnapshots);
+                        showToast('Loaded ' + parsed.boxes.length + ' boxes from ' + file.name + '.', 'success');
+                    } else {
+                        showToast('JSON file did not contain a boxes array.', 'warning');
+                    }
+                } catch (err) {
+                    showToast('Could not parse JSON file: ' + err.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
         }
 
         function toggleManualLogBoxForm() {
