@@ -1667,19 +1667,26 @@ $$;</pre>
         function computeRestingElevation(x, z, w, d, h, ignoreBoxId) {
             var bx = Number(x) || 0;
             var bz = Number(z) || 0;
-            var bw = Number(w) || 1;
-            var bd = Number(d) || 1;
-            var bh = Number(h) || 1;
+            var bw = Math.max(1, Number(w) || 1);
+            var bd = Math.max(1, Number(d) || 1);
+            var bh = Math.max(1, Number(h) || 1);
 
             var maxSupportTopY = 0;
             for (var i = 0; i < boxes.length; i++) {
                 var other = boxes[i];
                 if (!other || other.id === ignoreBoxId) continue;
 
-                var oy = Number(other.y) || 0;
-                var oh = Number(other.h) || 0;
+                var ox = Number(other.x) || 0;
+                var oz = Number(other.z) || 0;
+                var ow = Math.max(1, Number(other.w) || 1);
+                var od = Math.max(1, Number(other.d) || 1);
+                var oy = Math.max(0, Number(other.y) || 0);
+                var oh = Math.max(1, Number(other.h) || 1);
 
-                if (checkHorizontalOverlap({ x: bx, z: bz, w: bw, d: bd }, other)) {
+                var overlapsX = bx < ox + ow && bx + bw > ox;
+                var overlapsZ = bz < oz + od && bz + bd > oz;
+
+                if (overlapsX && overlapsZ) {
                     var topY = oy + oh;
                     if (topY > maxSupportTopY) {
                         maxSupportTopY = topY;
@@ -1687,98 +1694,95 @@ $$;</pre>
                 }
             }
 
-            var ceilingLimit = Math.max(0, LOCKER_SIZE - bh);
-            return Math.max(0, Math.min(ceilingLimit, Math.round(maxSupportTopY)));
+            var maxAllowedY = Math.max(0, LOCKER_SIZE - bh);
+            return Math.max(0, Math.min(maxAllowedY, Math.round(maxSupportTopY)));
+        }
+
+        function applyGravityToAllBoxes() {
+            var movedBoxes = [];
+            if (!Array.isArray(boxes) || boxes.length === 0) return movedBoxes;
+
+            // Normalize dimensions & X/Z first
+            for (var i = 0; i < boxes.length; i++) {
+                var b = boxes[i];
+                b.w = Math.max(1, Math.min(LOCKER_SIZE, Math.round(Number(b.w) || 18)));
+                b.d = Math.max(1, Math.min(LOCKER_SIZE, Math.round(Number(b.d) || 18)));
+                b.h = Math.max(1, Math.min(LOCKER_SIZE, Math.round(Number(b.h) || 12)));
+                b.x = Math.max(0, Math.min(LOCKER_SIZE - b.w, Math.round(Number(b.x) || 0)));
+                b.z = Math.max(0, Math.min(LOCKER_SIZE - b.d, Math.round(Number(b.z) || 0)));
+                b.y = Math.max(0, Math.min(LOCKER_SIZE - b.h, Math.round(Number(b.y) || 0)));
+            }
+
+            // Settle from lowest Y to highest Y so lower boxes land first
+            var sorted = boxes.slice().sort(function(a, b) {
+                return (a.y || 0) - (b.y || 0);
+            });
+
+            for (var j = 0; j < sorted.length; j++) {
+                var box = sorted[j];
+                var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+                if (box.y !== supportY) {
+                    box.y = supportY;
+                    if (movedBoxes.indexOf(box) === -1) {
+                        movedBoxes.push(box);
+                    }
+                }
+            }
+
+            return movedBoxes;
         }
 
         function resolveCollisionAndStack(candidateX, candidateZ, w, d, h, ignoreBoxId, fallbackCoords) {
-            var safeX = Math.max(0, Math.min(LOCKER_SIZE - w, Math.round(candidateX)));
-            var safeZ = Math.max(0, Math.min(LOCKER_SIZE - d, Math.round(candidateZ)));
-            var stackY = computeRestingElevation(safeX, safeZ, w, d, h, ignoreBoxId);
+            var bw = Math.max(1, Number(w) || 18);
+            var bd = Math.max(1, Number(d) || 18);
+            var bh = Math.max(1, Number(h) || 12);
 
-            if (isValidPlacement({ x: safeX, y: stackY, z: safeZ, w: w, d: d, h: h }, ignoreBoxId)) {
+            var safeX = Math.max(0, Math.min(LOCKER_SIZE - bw, Math.round(Number(candidateX) || 0)));
+            var safeZ = Math.max(0, Math.min(LOCKER_SIZE - bd, Math.round(Number(candidateZ) || 0)));
+            var stackY = computeRestingElevation(safeX, safeZ, bw, bd, bh, ignoreBoxId);
+
+            if (isValidPlacement({ x: safeX, y: stackY, z: safeZ, w: bw, d: bd, h: bh }, ignoreBoxId)) {
                 return { x: safeX, y: stackY, z: safeZ, collided: false };
             }
 
             if (fallbackCoords) {
+                var fbX = Math.max(0, Math.min(LOCKER_SIZE - bw, Math.round(Number(fallbackCoords.x) || 0)));
+                var fbZ = Math.max(0, Math.min(LOCKER_SIZE - bd, Math.round(Number(fallbackCoords.z) || 0)));
+
                 var slideXPos = {
                     x: safeX,
-                    y: computeRestingElevation(safeX, fallbackCoords.z, w, d, h, ignoreBoxId),
-                    z: fallbackCoords.z,
-                    w: w, d: d, h: h
+                    y: computeRestingElevation(safeX, fbZ, bw, bd, bh, ignoreBoxId),
+                    z: fbZ,
+                    w: bw, d: bd, h: bh
                 };
                 if (isValidPlacement(slideXPos, ignoreBoxId)) {
                     return { x: slideXPos.x, y: slideXPos.y, z: slideXPos.z, collided: false };
                 }
 
                 var slideZPos = {
-                    x: fallbackCoords.x,
-                    y: computeRestingElevation(fallbackCoords.x, safeZ, w, d, h, ignoreBoxId),
+                    x: fbX,
+                    y: computeRestingElevation(fbX, safeZ, bw, bd, bh, ignoreBoxId),
                     z: safeZ,
-                    w: w, d: d, h: h
+                    w: bw, d: bd, h: bh
                 };
                 if (isValidPlacement(slideZPos, ignoreBoxId)) {
                     return { x: slideZPos.x, y: slideZPos.y, z: slideZPos.z, collided: false };
                 }
+
+                return {
+                    x: fbX,
+                    y: computeRestingElevation(fbX, fbZ, bw, bd, bh, ignoreBoxId),
+                    z: fbZ,
+                    collided: true
+                };
             }
 
-            var bestPos = findNearestNonOverlappingSpot(safeX, safeZ, w, d, h, ignoreBoxId);
-            if (bestPos) {
-                return { x: bestPos.x, y: bestPos.y, z: bestPos.z, collided: true };
-            }
-
-            var fbX = fallbackCoords ? Math.max(0, Math.min(LOCKER_SIZE - w, fallbackCoords.x)) : 0;
-            var fbZ = fallbackCoords ? Math.max(0, Math.min(LOCKER_SIZE - d, fallbackCoords.z)) : 0;
-            return { x: fbX, y: computeRestingElevation(fbX, fbZ, w, d, h, ignoreBoxId), z: fbZ, collided: true };
-        }
-
-        function findNearestNonOverlappingSpot(targetX, targetZ, w, d, h, ignoreBoxId) {
-            var step = 2;
-            var bestCandidate = null;
-            var bestDist = Infinity;
-
-            for (var gz = 0; gz <= LOCKER_SIZE - d; gz += step) {
-                for (var gx = 0; gx <= LOCKER_SIZE - w; gx += step) {
-                    var gy = computeRestingElevation(gx, gz, w, d, h, ignoreBoxId);
-                    if (isValidPlacement({ x: gx, y: gy, z: gz, w: w, d: d, h: h }, ignoreBoxId)) {
-                        var dist = Math.hypot(gx - targetX, gz - targetZ);
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestCandidate = { x: gx, y: gy, z: gz };
-                        }
-                    }
-                }
-            }
-            return bestCandidate;
-        }
-
-        function applyGravityToAllBoxes() {
-            var movedBoxes = [];
-            var sorted = boxes.slice().sort(function(a, b) {
-                return (Number(a.y) || 0) - (Number(b.y) || 0);
-            });
-
-            for (var i = 0; i < sorted.length; i++) {
-                var box = sorted[i];
-                box.w = Math.max(1, Number(box.w) || 18);
-                box.d = Math.max(1, Number(box.d) || 18);
-                box.h = Math.max(1, Number(box.h) || 12);
-                box.x = Math.max(0, Math.min(LOCKER_SIZE - box.w, Math.round(Number(box.x) || 0)));
-                box.z = Math.max(0, Math.min(LOCKER_SIZE - box.d, Math.round(Number(box.z) || 0)));
-
-                var currentY = Math.round(Number(box.y) || 0);
-                var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
-
-                if (currentY !== supportY) {
-                    box.y = supportY;
-                    if (movedBoxes.indexOf(box) === -1) {
-                        movedBoxes.push(box);
-                    }
-                } else {
-                    box.y = currentY;
-                }
-            }
-            return movedBoxes;
+            return {
+                x: safeX,
+                y: computeRestingElevation(safeX, safeZ, bw, bd, bh, ignoreBoxId),
+                z: safeZ,
+                collided: true
+            };
         }
 
         function findSmartPosition(w, d, h, ignoreBoxId) {
@@ -2233,10 +2237,10 @@ $$;</pre>
                         : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700 hover:bg-slate-950');
 
                 return (
-                    '<div onclick="selectBox(\'' + box.id + '\', true)" class="cursor-pointer border ' + activeClass + ' rounded-xl p-2.5 transition space-y-1.5">' +
+                    '<div onclick="selectBox('' + box.id + '', true)" class="cursor-pointer border ' + activeClass + ' rounded-xl p-2.5 transition space-y-1.5">' +
                         '<div class="flex items-start justify-between gap-2">' +
                             '<div class="flex items-center gap-2 min-w-0">' +
-                                '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onclick="toggleBoxChecked(\'' + box.id + '\', event)" class="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-sky-500 shrink-0 cursor-pointer" title="Select box for color update">' +
+                                '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onclick="toggleBoxChecked('' + box.id + '', event)" class="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-sky-500 shrink-0 cursor-pointer" title="Select box for color update">' +
                                 '<span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-amber-500 text-slate-950 shrink-0">#' + escapeHtml(box.tagId || '00') + '</span>' +
                                 '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color:' + escapeHtml(box.color || '#38bdf8') + '"></span>' +
                                 '<span class="font-bold text-xs text-white truncate">' + escapeHtml(box.partName) + '</span>' +
