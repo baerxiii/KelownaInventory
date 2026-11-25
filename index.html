@@ -2141,8 +2141,28 @@ $$;</pre>
                 box.z = resolved.z;
                 box.y = resolved.y;
             } else {
-                // Snap Y directly to resting support so boxes never float in mid-air
-                box.y = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+                // Allow raising Y to stack onto another box or reach a valid non-colliding elevation,
+                // while preventing overlap with any other box; gravity still drops unsupported boxes on release/reload.
+                var targetY = clamped;
+                if (isValidPlacement({ x: box.x, y: targetY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                    box.y = targetY;
+                } else {
+                    // Try snapping onto the nearest supporting box top if moving upward
+                    var bestY = prev.y;
+                    for (var i = 0; i < boxes.length; i++) {
+                        var other = boxes[i];
+                        if (!other || other.id === box.id) continue;
+                        if (checkHorizontalOverlap(box, other)) {
+                            var topY = other.y + other.h;
+                            if (topY + box.h <= LOCKER_SIZE && isValidPlacement({ x: box.x, y: topY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                                if (targetY >= topY || prev.y < topY) {
+                                    bestY = topY;
+                                }
+                            }
+                        }
+                    }
+                    box.y = bestY;
+                }
             }
 
             document.getElementById('insp-x').value = box.x;
