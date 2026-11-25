@@ -2141,27 +2141,65 @@ $$;</pre>
                 box.z = resolved.z;
                 box.y = resolved.y;
             } else {
-                // Allow raising Y to stack onto another box or reach a valid non-colliding elevation,
-                // while preventing overlap with any other box; gravity still drops unsupported boxes on release/reload.
+                // Moving Y:
+                // - When raising Y, clear any overlapping box at or below targetY by lifting onto the
+                //   highest overlapping box's top (or targetY if higher and free), so you can stack onto
+                //   the top of any stack at (x, z).
+                // - When lowering Y, land on the highest supporting box top at or below targetY (or floor 0).
                 var targetY = clamped;
-                if (isValidPlacement({ x: box.x, y: targetY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
-                    box.y = targetY;
-                } else {
-                    // Try snapping onto the nearest supporting box top if moving upward
-                    var bestY = prev.y;
-                    for (var i = 0; i < boxes.length; i++) {
-                        var other = boxes[i];
-                        if (!other || other.id === box.id) continue;
-                        if (checkHorizontalOverlap(box, other)) {
-                            var topY = other.y + other.h;
-                            if (topY + box.h <= LOCKER_SIZE && isValidPlacement({ x: box.x, y: topY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
-                                if (targetY >= topY || prev.y < topY) {
-                                    bestY = topY;
-                                }
-                            }
+                var movingUp = targetY >= prev.y;
+
+                // Collect all boxes overlapping in X/Z with this box
+                var colTops = [];
+                for (var i = 0; i < boxes.length; i++) {
+                    var other = boxes[i];
+                    if (!other || other.id === box.id) continue;
+                    if (checkHorizontalOverlap(box, other)) {
+                        colTops.push(other.y + other.h);
+                    }
+                }
+                colTops.sort(function(a, b) { return a - b; });
+
+                if (movingUp) {
+                    var candidateY = targetY;
+                    // If targetY collides with any box in this X/Z column, step up above that box's top
+                    for (var c = 0; c < colTops.length; c++) {
+                        var top = colTops[c];
+                        if (candidateY < top && candidateY + box.h > (top - (boxes.find(function(b) { return b.id !== box.id && checkHorizontalOverlap(box, b) && (b.y + b.h) === top; }) || { h: 0 }).h)) {
+                            candidateY = top;
                         }
                     }
-                    box.y = bestY;
+                    candidateY = Math.max(0, Math.min(LOCKER_SIZE - box.h, candidateY));
+                    if (isValidPlacement({ x: box.x, y: candidateY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                        box.y = candidateY;
+                    } else {
+                        // Snap to highest non-colliding top in column
+                        var snappedUp = prev.y;
+                        for (var s = colTops.length - 1; s >= 0; s--) {
+                            var t = colTops[s];
+                            if (t + box.h <= LOCKER_SIZE && isValidPlacement({ x: box.x, y: t, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                                snappedUp = t;
+                                break;
+                            }
+                        }
+                        box.y = snappedUp;
+                    }
+                } else {
+                    // Moving down: rest on highest supporting top <= targetY, or targetY if unobstructed
+                    var supportBelow = 0;
+                    for (var dIdx = 0; dIdx < colTops.length; dIdx++) {
+                        if (colTops[dIdx] <= targetY && colTops[dIdx] + box.h <= LOCKER_SIZE) {
+                            supportBelow = colTops[dIdx];
+                        }
+                    }
+                    var downY = Math.max(supportBelow, targetY);
+                    if (isValidPlacement({ x: box.x, y: downY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                        box.y = downY;
+                    } else if (isValidPlacement({ x: box.x, y: supportBelow, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                        box.y = supportBelow;
+                    } else {
+                        box.y = prev.y;
+                    }
                 }
             }
 
