@@ -1665,16 +1665,30 @@ $$;</pre>
         }
 
         function computeRestingElevation(x, z, w, d, h, ignoreBoxId) {
+            var bx = Number(x) || 0;
+            var bz = Number(z) || 0;
+            var bw = Number(w) || 1;
+            var bd = Number(d) || 1;
+            var bh = Number(h) || 1;
+
             var maxSupportTopY = 0;
             for (var i = 0; i < boxes.length; i++) {
                 var other = boxes[i];
-                if (other.id === ignoreBoxId) continue;
-                if (checkHorizontalOverlap({ x: x, z: z, w: w, d: d }, other)) {
-                    var topY = other.y + other.h;
-                    if (topY > maxSupportTopY) maxSupportTopY = topY;
+                if (!other || other.id === ignoreBoxId) continue;
+
+                var oy = Number(other.y) || 0;
+                var oh = Number(other.h) || 0;
+
+                if (checkHorizontalOverlap({ x: bx, z: bz, w: bw, d: bd }, other)) {
+                    var topY = oy + oh;
+                    if (topY > maxSupportTopY) {
+                        maxSupportTopY = topY;
+                    }
                 }
             }
-            return maxSupportTopY;
+
+            var ceilingLimit = Math.max(0, LOCKER_SIZE - bh);
+            return Math.max(0, Math.min(ceilingLimit, Math.round(maxSupportTopY)));
         }
 
         function resolveCollisionAndStack(candidateX, candidateZ, w, d, h, ignoreBoxId, fallbackCoords) {
@@ -1741,19 +1755,27 @@ $$;</pre>
         function applyGravityToAllBoxes() {
             var movedBoxes = [];
             var sorted = boxes.slice().sort(function(a, b) {
-                return (a.y || 0) - (b.y || 0);
+                return (Number(a.y) || 0) - (Number(b.y) || 0);
             });
 
             for (var i = 0; i < sorted.length; i++) {
                 var box = sorted[i];
-                var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
-                supportY = Math.max(0, Math.min(LOCKER_SIZE - box.h, Math.round(supportY)));
+                box.w = Math.max(1, Number(box.w) || 18);
+                box.d = Math.max(1, Number(box.d) || 18);
+                box.h = Math.max(1, Number(box.h) || 12);
+                box.x = Math.max(0, Math.min(LOCKER_SIZE - box.w, Math.round(Number(box.x) || 0)));
+                box.z = Math.max(0, Math.min(LOCKER_SIZE - box.d, Math.round(Number(box.z) || 0)));
 
-                if (box.y !== supportY) {
+                var currentY = Math.round(Number(box.y) || 0);
+                var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+
+                if (currentY !== supportY) {
                     box.y = supportY;
                     if (movedBoxes.indexOf(box) === -1) {
                         movedBoxes.push(box);
                     }
+                } else {
+                    box.y = currentY;
                 }
             }
             return movedBoxes;
