@@ -162,13 +162,17 @@
                 </div>
             </div>
 
-            <!-- Top-Left Camera Controls -->
+            <!-- Top-Left Camera & Label Mode Controls -->
             <div class="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 z-10">
                 <div class="bg-slate-900/90 backdrop-blur border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-lg">
                     <button onclick="setCameraView('iso')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition" data-view="iso">Isometric</button>
                     <button onclick="setCameraView('front')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="front">Door / Front</button>
                     <button onclick="setCameraView('top')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="top">Top-Down</button>
                     <button onclick="setCameraView('interior')" class="cam-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-view="interior">Interior</button>
+                </div>
+                <div class="bg-slate-900/90 backdrop-blur border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-lg">
+                    <button type="button" onclick="setLabelDisplayMode('selected')" class="lbl-mode-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition" data-mode="selected" title="Show floating callouts only for selected/checked boxes; keep IDs on boxes">Selected Only</button>
+                    <button type="button" onclick="setLabelDisplayMode('all')" class="lbl-mode-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-mode="all" title="Show floating callouts on all boxes">All Labels</button>
                 </div>
             </div>
 
@@ -639,6 +643,7 @@ $$;</pre>
         var selectedBoxId = null;
         var checkedBoxIds = [];
         var dimensionUnit = 'in';
+        var labelDisplayMode = 'selected'; // 'selected' | 'all'
 
         var supabaseClient = null;
         var realtimeChannel = null;
@@ -1363,6 +1368,58 @@ $$;</pre>
             lockerGroup.add(mesh);
         }
 
+        function setLabelDisplayMode(mode) {
+            labelDisplayMode = mode === 'all' ? 'all' : 'selected';
+            document.querySelectorAll('.lbl-mode-btn').forEach(function(btn) {
+                var active = btn.dataset.mode === labelDisplayMode;
+                btn.className = active
+                    ? 'lbl-mode-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition'
+                    : 'lbl-mode-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition';
+            });
+            syncBoxesTo3D();
+        }
+
+        function createBoxSurfacePlaque(box, widthIn, heightIn, isSelected) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            var ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = isSelected ? 'rgba(15, 23, 42, 0.92)' : 'rgba(9, 13, 22, 0.78)';
+            ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(245, 158, 11, 0.85)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(6, 6, canvas.width - 12, canvas.height - 12, 14);
+            } else {
+                ctx.rect(6, 6, canvas.width - 12, canvas.height - 12);
+            }
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.font = 'bold 46px JetBrains Mono, monospace';
+            ctx.fillStyle = '#fbbf24';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('#' + (box.tagId || '00'), canvas.width / 2, 46);
+
+            ctx.font = '600 22px Inter, sans-serif';
+            ctx.fillStyle = '#f8fafc';
+            var titleText = box.partName || 'Item';
+            if (titleText.length > 18) titleText = titleText.slice(0, 17) + '…';
+            ctx.fillText(titleText, canvas.width / 2, 90);
+
+            var texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            var plaqueW = Math.max(4, Math.min(widthIn * 0.84, 24));
+            var plaqueH = Math.max(2.5, Math.min(heightIn * 0.72, 12));
+            var mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(plaqueW, plaqueH),
+                new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })
+            );
+            return mesh;
+        }
+
         function createBoxLabelSprite(box, isSelected) {
             var canvas = document.createElement('canvas');
             canvas.width = 360;
@@ -1456,9 +1513,22 @@ $$;</pre>
                 );
                 mesh.add(wireframe);
 
-                var labelSprite = createBoxLabelSprite(box, isSelected);
-                labelSprite.position.set(0, (box.h / 2) + 5.5, 0);
-                mesh.add(labelSprite);
+                // Compact ID + short title plaque directly on the front (+Z) and top (+Y) faces
+                var frontPlaque = createBoxSurfacePlaque(box, box.w, box.h, isSelected);
+                frontPlaque.position.set(0, 0, (box.d / 2) + 0.08);
+                mesh.add(frontPlaque);
+
+                var topPlaque = createBoxSurfacePlaque(box, box.w, box.d, isSelected);
+                topPlaque.rotation.x = -Math.PI / 2;
+                topPlaque.position.set(0, (box.h / 2) + 0.08, 0);
+                mesh.add(topPlaque);
+
+                // Floating callout sprite: shown for all boxes in 'all' mode, or only selected/checked/dragged boxes in 'selected' mode
+                if (labelDisplayMode === 'all' || isSelected || isBeingDragged) {
+                    var labelSprite = createBoxLabelSprite(box, isSelected);
+                    labelSprite.position.set(0, (box.h / 2) + 5.5, 0);
+                    mesh.add(labelSprite);
+                }
 
                 boxesGroup.add(mesh);
                 boxMeshes[box.id] = mesh;
