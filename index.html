@@ -190,6 +190,13 @@
                 </div>
             </div>
 
+            <!-- Active Wall Paint Mode Indicator -->
+            <div id="wall-paint-banner" class="hidden absolute top-24 left-3 z-10 bg-sky-950/95 border border-sky-400/50 text-sky-100 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg">
+                <span class="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse"></span>
+                <span>Wall Paint Mode Active — Tap or drag on walls to paint 24"×24" panels</span>
+                <button type="button" onclick="setWallPaintMode(false)" class="ml-1 px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-[11px] text-white">Done</button>
+            </div>
+
             <!-- Active Floor Paint Mode Indicator -->
             <div id="floor-paint-banner" class="hidden absolute top-14 left-3 z-10 bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -571,54 +578,64 @@
                     </div>
                 </div>
 
-                <!-- Side Wall Backgrounds Section -->
+                <!-- Side Wall Painting Section -->
                 <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2.5">
                     <div class="flex items-center justify-between">
-                        <span class="font-bold text-white">2. Side Wall Backgrounds</span>
-                        <span class="text-[10px] font-mono text-slate-400">Left &amp; Right Walls</span>
+                        <span class="font-bold text-white">2. Paint Side Walls</span>
+                        <span id="studio-wall-tile-count" class="font-mono text-[11px] text-sky-400">0 painted wall panels</span>
                     </div>
+                    <p class="text-[11px] text-slate-400">Paint a full wall color or toggle the Wall Brush to paint individual 24"×24" wall panels directly on the Left, Right, or Back wall.</p>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Target Side Wall</label>
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Target Wall</label>
                             <select id="wall-target-select" onchange="syncWallControlsFromState()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 h-8 text-xs text-white outline-none">
                                 <option value="both">Both Side Walls (Left + Right)</option>
                                 <option value="left">Left Wall Only</option>
                                 <option value="right">Right Wall Only</option>
+                                <option value="back">Back Wall Only</option>
+                                <option value="all">All 3 Walls (Left + Right + Back)</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Backdrop Preset</label>
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Wall Pattern</label>
                             <select id="wall-preset-select" onchange="applyWallPreset(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 h-8 text-xs text-white outline-none">
+                                <option value="solid">Solid Painted Wall</option>
                                 <option value="blueprint">Depot Blueprint Grid</option>
-                                <option value="hazard">Safety Stripe Border</option>
-                                <option value="slate">Clean Depot Slate</option>
-                                <option value="custom">Custom Uploaded Image</option>
+                                <option value="hazard">Safety Stripe Lower Band</option>
+                                <option value="slate">Clean Matte Finish</option>
                             </select>
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                    <div class="flex flex-wrap items-center gap-2 pt-0.5">
+                        <input type="color" id="wall-tint-color" value="#0284c7" onchange="applyWallTintAndOpacity()" class="w-10 h-8 rounded border border-slate-700 bg-slate-900 cursor-pointer">
+                        <button type="button" onclick="setWallPaintSwatch('#1e293b')" class="w-5 h-5 rounded-full bg-[#1e293b] border border-slate-600" title="Slate"></button>
+                        <button type="button" onclick="setWallPaintSwatch('#0284c7')" class="w-5 h-5 rounded-full bg-[#0284c7]" title="Depot Blue"></button>
+                        <button type="button" onclick="setWallPaintSwatch('#10b981')" class="w-5 h-5 rounded-full bg-[#10b981]" title="Emerald"></button>
+                        <button type="button" onclick="setWallPaintSwatch('#f59e0b')" class="w-5 h-5 rounded-full bg-[#f59e0b]" title="Amber"></button>
+                        <button type="button" onclick="setWallPaintSwatch('#e11d48')" class="w-5 h-5 rounded-full bg-[#e11d48]" title="Crimson"></button>
+                        <button type="button" onclick="paintSelectedWallsFull()" class="ml-auto h-8 px-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg transition">Paint Wall</button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <button type="button" id="btn-toggle-wall-brush" onclick="toggleWallPaintModeFromModal()" class="h-8 px-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg transition">Start Wall Brush</button>
                         <div class="flex items-center gap-2">
-                            <span class="text-[11px] text-slate-400">Wall Tint:</span>
-                            <input type="color" id="wall-tint-color" value="#1e293b" onchange="applyWallTintAndOpacity()" class="w-8 h-7 rounded border border-slate-700 bg-slate-900 cursor-pointer">
+                            <button type="button" id="btn-erase-wall-tile" onclick="toggleEraseWallTileMode()" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-lg font-semibold transition">Wall Eraser: OFF</button>
+                            <button type="button" onclick="clearPaintedWallPanels()" class="h-8 px-2.5 bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 border border-rose-800/60 rounded-lg font-semibold transition">Clear Panels</button>
                         </div>
-                        <label class="px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-semibold cursor-pointer">
-                            <span>Upload Wall Image</span>
-                            <input type="file" accept="image/*" onchange="handleSideWallImageUpload(event)" class="hidden">
-                        </label>
                     </div>
 
                     <div class="space-y-1">
                         <div class="flex justify-between text-[11px] font-mono">
-                            <span class="text-slate-400">Side Wall Opacity</span>
-                            <span id="wall-opacity-val" class="text-white">35%</span>
+                            <span class="text-slate-400">Wall Paint Opacity</span>
+                            <span id="wall-opacity-val" class="text-white">45%</span>
                         </div>
-                        <input type="range" id="wall-opacity-slider" min="5" max="95" value="35" oninput="applyWallTintAndOpacity()">
+                        <input type="range" id="wall-opacity-slider" min="10" max="95" value="45" oninput="applyWallTintAndOpacity()">
                     </div>
 
                     <div class="flex justify-end pt-1">
-                        <button type="button" onclick="resetSideWallBackgrounds()" class="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg font-semibold transition">Reset Side Walls</button>
+                        <button type="button" onclick="resetSideWallBackgrounds()" class="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg font-semibold transition">Reset Walls</button>
                     </div>
                 </div>
             </div>
@@ -1835,17 +1852,25 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
         var paintedTilesGroup = null;
         var leftWallMesh = null;
         var rightWallMesh = null;
+        var backWallMesh = null;
+        var paintedWallsGroup = null;
         var isFloorPaintMode = false;
         var isEraseTileMode = false;
         var isPaintingFloorDrag = false;
         var lastPaintedCellKey = '';
+        var isWallPaintMode = false;
+        var isEraseWallTileMode = false;
+        var isPaintingWallDrag = false;
+        var lastPaintedWallKey = '';
 
         var lockerStudioState = {
             baseFloorColor: '#1e293b',
             paintColor: '#10b981',
             paintedTiles: {}, // { "gx_gz": "#hex" } where gx, gz in 0..9 (12" each)
-            leftWall: { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' },
-            rightWall: { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' }
+            paintedWallPanels: {}, // { "wall_col_row": "#hex" } where col, row in 0..4 (24" each)
+            leftWall: { preset: 'solid', tint: '#0284c7', opacity: 0.45 },
+            rightWall: { preset: 'solid', tint: '#0284c7', opacity: 0.45 },
+            backWall: { preset: 'solid', tint: '#1e293b', opacity: 0.35 }
         };
 
         function loadLockerStudioState() {
@@ -1857,8 +1882,10 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                         lockerStudioState.baseFloorColor = parsed.baseFloorColor || '#1e293b';
                         lockerStudioState.paintColor = parsed.paintColor || '#10b981';
                         lockerStudioState.paintedTiles = (parsed.paintedTiles && typeof parsed.paintedTiles === 'object') ? parsed.paintedTiles : {};
+                        if (parsed.paintedWallPanels && typeof parsed.paintedWallPanels === 'object') lockerStudioState.paintedWallPanels = parsed.paintedWallPanels;
                         if (parsed.leftWall) lockerStudioState.leftWall = Object.assign({}, lockerStudioState.leftWall, parsed.leftWall);
                         if (parsed.rightWall) lockerStudioState.rightWall = Object.assign({}, lockerStudioState.rightWall, parsed.rightWall);
+                        if (parsed.backWall) lockerStudioState.backWall = Object.assign({}, lockerStudioState.backWall, parsed.backWall);
                     }
                 }
             } catch (e) {}
@@ -1875,9 +1902,15 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
 
         function updateStudioTileCountUI() {
             var el = document.getElementById('studio-tile-count');
-            if (!el) return;
-            var count = Object.keys(lockerStudioState.paintedTiles || {}).length;
-            el.textContent = count + ' painted tile' + (count === 1 ? '' : 's');
+            if (el) {
+                var count = Object.keys(lockerStudioState.paintedTiles || {}).length;
+                el.textContent = count + ' painted tile' + (count === 1 ? '' : 's');
+            }
+            var wel = document.getElementById('studio-wall-tile-count');
+            if (wel) {
+                var wcount = Object.keys(lockerStudioState.paintedWallPanels || {}).length;
+                wel.textContent = wcount + ' painted wall panel' + (wcount === 1 ? '' : 's');
+            }
         }
 
         function setFloorPaintSwatch(hex) {
@@ -2058,44 +2091,188 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             return tex;
         }
 
+        function setWallPaintSwatch(hex) {
+            var tintInp = document.getElementById('wall-tint-color');
+            if (tintInp) tintInp.value = hex;
+            applyWallTintAndOpacity();
+        }
+
+        function setWallPaintMode(active) {
+            isWallPaintMode = Boolean(active);
+            if (!isWallPaintMode) {
+                isPaintingWallDrag = false;
+                lastPaintedWallKey = '';
+                if (controls && !isFloorPaintMode && !isFreeMoveMode) controls.enabled = true;
+            } else {
+                setFloorPaintMode(false);
+                if (controls) controls.enabled = false;
+            }
+            var banner = document.getElementById('wall-paint-banner');
+            if (banner) {
+                if (isWallPaintMode) banner.classList.remove('hidden');
+                else banner.classList.add('hidden');
+            }
+            var btn = document.getElementById('btn-toggle-wall-brush');
+            if (btn) {
+                btn.textContent = isWallPaintMode ? 'Stop Wall Brush' : 'Start Wall Brush';
+            }
+        }
+
+        function toggleWallPaintModeFromModal() {
+            var next = !isWallPaintMode;
+            closeModal('modal-studio');
+            setWallPaintMode(next);
+            if (next) {
+                showToast('Tap or drag on the walls to paint 24"×24" wall panels.', 'info');
+            }
+        }
+
+        function toggleEraseWallTileMode() {
+            isEraseWallTileMode = !isEraseWallTileMode;
+            var btn = document.getElementById('btn-erase-wall-tile');
+            if (btn) {
+                btn.textContent = 'Wall Eraser: ' + (isEraseWallTileMode ? 'ON' : 'OFF');
+                btn.className = isEraseWallTileMode
+                    ? 'h-8 px-2.5 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-lg font-bold transition'
+                    : 'h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-lg font-semibold transition';
+            }
+        }
+
+        function clearPaintedWallPanels() {
+            lockerStudioState.paintedWallPanels = {};
+            saveLockerStudioState();
+            rebuildPaintedWallPanels3D();
+            showToast('Cleared all painted wall panels.', 'info');
+        }
+
+        function paintSelectedWallsFull() {
+            var tintInp = document.getElementById('wall-tint-color');
+            var opSlider = document.getElementById('wall-opacity-slider');
+            var hex = (tintInp && tintInp.value) || '#0284c7';
+            var pct = opSlider ? parseInt(opSlider.value, 10) : 45;
+            var targets = getSelectedWallTargets();
+            targets.forEach(function(k) {
+                if (!lockerStudioState[k]) lockerStudioState[k] = { preset: 'solid', tint: hex, opacity: pct / 100 };
+                lockerStudioState[k].tint = hex;
+                lockerStudioState[k].opacity = pct / 100;
+            });
+            saveLockerStudioState();
+            applySideWallMaterials3D();
+            showToast('Painted selected wall(s).', 'success');
+        }
+
+        function rebuildPaintedWallPanels3D() {
+            if (!paintedWallsGroup) return;
+            while (paintedWallsGroup.children.length > 0) {
+                paintedWallsGroup.remove(paintedWallsGroup.children[0]);
+            }
+
+            var panelSize = LOCKER_SIZE / 5; // 24" x 24" panels (5x5 grid per 120"x120" wall)
+            var half = LOCKER_SIZE / 2;
+            var geo = new THREE.PlaneGeometry(panelSize - 0.6, panelSize - 0.6);
+
+            Object.keys(lockerStudioState.paintedWallPanels || {}).forEach(function(key) {
+                var hex = lockerStudioState.paintedWallPanels[key];
+                var parts = key.split('_');
+                var wallName = parts[0];
+                var col = parseInt(parts[1], 10);
+                var row = parseInt(parts[2], 10);
+                if (isNaN(col) || isNaN(row) || col < 0 || col > 4 || row < 0 || row > 4) return;
+
+                var mat = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(hex || '#0284c7'),
+                    transparent: true,
+                    opacity: 0.72,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                });
+                var mesh = new THREE.Mesh(geo, mat);
+                var yPos = (row * panelSize) + (panelSize / 2);
+                var alongPos = (col * panelSize) + (panelSize / 2) - half;
+
+                if (wallName === 'left') {
+                    mesh.rotation.y = Math.PI / 2;
+                    mesh.position.set(-half + 0.35, yPos, alongPos);
+                } else if (wallName === 'right') {
+                    mesh.rotation.y = -Math.PI / 2;
+                    mesh.position.set(half - 0.35, yPos, alongPos);
+                } else if (wallName === 'back') {
+                    mesh.position.set(alongPos, yPos, -half + 0.35);
+                } else {
+                    return;
+                }
+                paintedWallsGroup.add(mesh);
+            });
+            updateStudioTileCountUI();
+        }
+
+        function paintWallAtClientCoords(clientX, clientY) {
+            if (!camera || !renderer) return;
+            var wallMeshes = [leftWallMesh, rightWallMesh, backWallMesh].filter(Boolean);
+            if (wallMeshes.length === 0) return;
+
+            var rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            var hits = raycaster.intersectObjects(wallMeshes, false);
+            if (!hits || hits.length === 0) return;
+
+            var hit = hits[0];
+            var wallName = hit.object.userData && hit.object.userData.wallSide;
+            if (!wallName) return;
+
+            var pt = hit.point;
+            var half = LOCKER_SIZE / 2;
+            var panelSize = LOCKER_SIZE / 5;
+            var row = Math.max(0, Math.min(4, Math.floor(pt.y / panelSize)));
+            var alongVal = (wallName === 'back') ? (pt.x + half) : (pt.z + half);
+            var col = Math.max(0, Math.min(4, Math.floor(alongVal / panelSize)));
+
+            var key = wallName + '_' + col + '_' + row;
+            if (key === lastPaintedWallKey) return;
+            lastPaintedWallKey = key;
+
+            var tintInp = document.getElementById('wall-tint-color');
+            var colorHex = (tintInp && tintInp.value) || '#0284c7';
+
+            if (isEraseWallTileMode) {
+                delete lockerStudioState.paintedWallPanels[key];
+            } else {
+                lockerStudioState.paintedWallPanels[key] = colorHex;
+            }
+            saveLockerStudioState();
+            rebuildPaintedWallPanels3D();
+        }
+
         function applySideWallMaterials3D() {
             var sides = [
                 { key: 'leftWall', mesh: leftWallMesh, label: 'LEFT WALL' },
-                { key: 'rightWall', mesh: rightWallMesh, label: 'RIGHT WALL' }
+                { key: 'rightWall', mesh: rightWallMesh, label: 'RIGHT WALL' },
+                { key: 'backWall', mesh: backWallMesh, label: 'BACK WALL' }
             ];
 
             sides.forEach(function(item) {
                 if (!item.mesh) return;
-                var cfg = lockerStudioState[item.key];
+                var cfg = lockerStudioState[item.key] || { preset: 'solid', tint: '#1e293b', opacity: 0.4 };
                 var mat = item.mesh.material;
                 mat.transparent = true;
-                mat.opacity = Math.max(0.05, Math.min(0.95, Number(cfg.opacity) || 0.35));
+                mat.opacity = Math.max(0.08, Math.min(0.95, Number(cfg.opacity) || 0.4));
                 mat.side = THREE.DoubleSide;
                 mat.depthWrite = false;
 
-                if (cfg.preset === 'custom' && cfg.customDataUrl) {
-                    var img = new Image();
-                    img.onload = function() {
-                        var imgTex = new THREE.Texture(img);
-                        imgTex.needsUpdate = true;
-                        mat.map = imgTex;
-                        mat.color.set('#ffffff');
-                        mat.needsUpdate = true;
-                    };
-                    img.src = cfg.customDataUrl;
-                } else {
-                    if (mat.map) {
-                        mat.map.dispose();
-                        mat.map = null;
-                    }
-                    if (cfg.preset === 'slate') {
-                        mat.color.set(cfg.tint || '#1e293b');
-                    } else {
-                        mat.map = createWallBackdropTexture(cfg, item.label);
-                        mat.color.set('#ffffff');
-                    }
-                    mat.needsUpdate = true;
+                if (mat.map) {
+                    mat.map.dispose();
+                    mat.map = null;
                 }
+                if (cfg.preset === 'solid' || cfg.preset === 'slate') {
+                    mat.color.set(cfg.tint || '#1e293b');
+                } else {
+                    mat.map = createWallBackdropTexture(cfg, item.label);
+                    mat.color.set('#ffffff');
+                }
+                mat.needsUpdate = true;
             });
         }
 
@@ -2104,6 +2281,8 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             var val = sel ? sel.value : 'both';
             if (val === 'left') return ['leftWall'];
             if (val === 'right') return ['rightWall'];
+            if (val === 'back') return ['backWall'];
+            if (val === 'all') return ['leftWall', 'rightWall', 'backWall'];
             return ['leftWall', 'rightWall'];
         }
 
@@ -2169,12 +2348,15 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
         }
 
         function resetSideWallBackgrounds() {
-            lockerStudioState.leftWall = { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' };
-            lockerStudioState.rightWall = { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' };
+            lockerStudioState.leftWall = { preset: 'solid', tint: '#0284c7', opacity: 0.45 };
+            lockerStudioState.rightWall = { preset: 'solid', tint: '#0284c7', opacity: 0.45 };
+            lockerStudioState.backWall = { preset: 'solid', tint: '#1e293b', opacity: 0.35 };
+            lockerStudioState.paintedWallPanels = {};
             saveLockerStudioState();
             syncWallControlsFromState();
             applySideWallMaterials3D();
-            showToast('Reset side wall backgrounds to default.', 'info');
+            rebuildPaintedWallPanels3D();
+            showToast('Reset wall paint and panels to default.', 'info');
         }
 
         function buildLockerStructure() {
@@ -2222,19 +2404,26 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                 depthWrite: false
             });
 
-            var backWall = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat);
-            backWall.position.set(0, half, -half);
-            lockerGroup.add(backWall);
+            backWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat.clone());
+            backWallMesh.position.set(0, half, -half);
+            backWallMesh.userData = { wallSide: 'back' };
+            lockerGroup.add(backWallMesh);
 
             leftWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat.clone());
             leftWallMesh.rotation.y = Math.PI / 2;
             leftWallMesh.position.set(-half, half, 0);
+            leftWallMesh.userData = { wallSide: 'left' };
             lockerGroup.add(leftWallMesh);
 
             rightWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat.clone());
             rightWallMesh.rotation.y = -Math.PI / 2;
             rightWallMesh.position.set(half, half, 0);
+            rightWallMesh.userData = { wallSide: 'right' };
             lockerGroup.add(rightWallMesh);
+
+            paintedWallsGroup = new THREE.Group();
+            lockerGroup.add(paintedWallsGroup);
+            rebuildPaintedWallPanels3D();
 
             applySideWallMaterials3D();
 
@@ -2615,6 +2804,12 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                 paintFloorAtClientCoords(event.clientX, event.clientY);
                 return;
             }
+            if (isWallPaintMode) {
+                isPaintingWallDrag = true;
+                lastPaintedWallKey = '';
+                paintWallAtClientCoords(event.clientX, event.clientY);
+                return;
+            }
 
             var hit = getRaycastBoxHit(event.clientX, event.clientY);
             if (hit) {
@@ -2650,6 +2845,10 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
         function onPointerMove(event) {
             if (isFloorPaintMode && isPaintingFloorDrag) {
                 paintFloorAtClientCoords(event.clientX, event.clientY);
+                return;
+            }
+            if (isWallPaintMode && isPaintingWallDrag) {
+                paintWallAtClientCoords(event.clientX, event.clientY);
                 return;
             }
             if (isDraggingBox && draggedBoxId) {
@@ -2733,6 +2932,11 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             if (isFloorPaintMode) {
                 isPaintingFloorDrag = false;
                 lastPaintedCellKey = '';
+                return;
+            }
+            if (isWallPaintMode) {
+                isPaintingWallDrag = false;
+                lastPaintedWallKey = '';
                 return;
             }
             var dist = Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y);
