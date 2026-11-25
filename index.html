@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
+    <link rel="icon" href="data:,">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LockerGrid 3D — KelownaInventory</title>
@@ -520,11 +521,11 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         <div>
                             <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Project URL</label>
-                            <input type="text" id="sb-url-input" placeholder="https://uzbbwvihkfzdbnowhglc.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
+                            <input type="text" id="sb-url-input" placeholder="https://xyzcompany.supabase.co" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
                         </div>
                         <div>
                             <label class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Supabase Publishable / Anon Key</label>
-                            <input type="password" id="sb-key-input" placeholder="sb_publishable_a6YEwdDOpkZ6BI8pHXVPnQ_WlFMlHmf" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
+                            <input type="password" id="sb-key-input" placeholder="sb_publishable_..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-emerald-400">
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -2237,10 +2238,10 @@ $$;</pre>
                         : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700 hover:bg-slate-950');
 
                 return (
-                    '<div onclick="selectBox('' + box.id + '', true)" class="cursor-pointer border ' + activeClass + ' rounded-xl p-2.5 transition space-y-1.5">' +
+                    '<div onclick="selectBox(\x27' + box.id + '\x27, true)" class="cursor-pointer border ' + activeClass + ' rounded-xl p-2.5 transition space-y-1.5">' +
                         '<div class="flex items-start justify-between gap-2">' +
                             '<div class="flex items-center gap-2 min-w-0">' +
-                                '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onclick="toggleBoxChecked('' + box.id + '', event)" class="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-sky-500 shrink-0 cursor-pointer" title="Select box for color update">' +
+                                '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onclick="toggleBoxChecked(\x27' + box.id + '\x27, event)" class="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-sky-500 shrink-0 cursor-pointer" title="Select box for color update">' +
                                 '<span class="font-mono font-bold text-xs px-2 py-0.5 rounded bg-amber-500 text-slate-950 shrink-0">#' + escapeHtml(box.tagId || '00') + '</span>' +
                                 '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color:' + escapeHtml(box.color || '#38bdf8') + '"></span>' +
                                 '<span class="font-bold text-xs text-white truncate">' + escapeHtml(box.partName) + '</span>' +
