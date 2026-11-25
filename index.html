@@ -379,7 +379,7 @@
                     </div>
                     <div>
                         <div class="flex justify-between text-[11px] font-mono mb-0.5">
-                            <span class="text-slate-400">Pos Y (Floor → Ceiling)</span>
+                            <span class="text-slate-400">Pos Y (Floor → Stack Top)</span>
                             <span id="insp-y-val" class="text-white">0"</span>
                         </div>
                         <input type="range" id="insp-y" min="0" max="100" oninput="moveSelectedBox('y', this.value)" onchange="commitBoxMove()">
@@ -1052,7 +1052,8 @@ $$;</pre>
                         return boxes.some(function(b) { return b.id === id; });
                     });
                     updateSelectionUI();
-                    applyGravityToAllBoxes();
+                    var settled = applyGravityToAllBoxes();
+                    if (settled.length > 0) cloudUpsertManyBoxes(settled);
                     syncBoxesTo3D();
                     renderInventoryList();
                     updateStats();
@@ -1102,7 +1103,8 @@ $$;</pre>
                         return boxes.some(function(b) { return b.id === id; });
                     });
                     updateSelectionUI();
-                    applyGravityToAllBoxes();
+                    var settled = applyGravityToAllBoxes();
+                    if (settled.length > 0) cloudUpsertManyBoxes(settled);
                     syncBoxesTo3D();
                     renderInventoryList();
                     updateStats();
@@ -1738,22 +1740,19 @@ $$;</pre>
 
         function applyGravityToAllBoxes() {
             var movedBoxes = [];
-            var changed = true;
-            var guard = 0;
+            var sorted = boxes.slice().sort(function(a, b) {
+                return (a.y || 0) - (b.y || 0);
+            });
 
-            while (changed && guard < 25) {
-                changed = false;
-                guard++;
+            for (var i = 0; i < sorted.length; i++) {
+                var box = sorted[i];
+                var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
+                supportY = Math.max(0, Math.min(LOCKER_SIZE - box.h, Math.round(supportY)));
 
-                for (var i = 0; i < boxes.length; i++) {
-                    var box = boxes[i];
-                    var supportY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
-                    if (supportY < box.y) {
-                        if (isValidPlacement({ x: box.x, y: supportY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
-                            box.y = Math.max(0, supportY);
-                            changed = true;
-                            if (movedBoxes.indexOf(box) === -1) movedBoxes.push(box);
-                        }
+                if (box.y !== supportY) {
+                    box.y = supportY;
+                    if (movedBoxes.indexOf(box) === -1) {
+                        movedBoxes.push(box);
                     }
                 }
             }
@@ -1987,21 +1986,17 @@ $$;</pre>
                 box.x = resolved.x;
                 box.z = resolved.z;
                 box.y = resolved.y;
-
-                document.getElementById('insp-x').value = box.x;
-                document.getElementById('insp-z').value = box.z;
-                document.getElementById('insp-y').value = box.y;
-                document.getElementById('insp-x-val').textContent = box.x + '"';
-                document.getElementById('insp-z-val').textContent = box.z + '"';
-                document.getElementById('insp-y-val').textContent = box.y + '"';
             } else {
-                var minStackY = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
-                if (clamped < minStackY || !isValidPlacement({ x: box.x, y: clamped, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
-                    box.y = minStackY;
-                }
-                document.getElementById('insp-y').value = box.y;
-                document.getElementById('insp-y-val').textContent = box.y + '"';
+                // Snap Y directly to resting support so boxes never float in mid-air
+                box.y = computeRestingElevation(box.x, box.z, box.w, box.d, box.h, box.id);
             }
+
+            document.getElementById('insp-x').value = box.x;
+            document.getElementById('insp-z').value = box.z;
+            document.getElementById('insp-y').value = box.y;
+            document.getElementById('insp-x-val').textContent = box.x + '"';
+            document.getElementById('insp-z-val').textContent = box.z + '"';
+            document.getElementById('insp-y-val').textContent = box.y + '"';
 
             syncBoxesTo3D();
         }
@@ -2283,7 +2278,7 @@ $$;</pre>
             boxes = DEFAULT_BOXES.map(function(b) { return Object.assign({}, b); });
             checkedBoxIds = [];
             updateSelectionUI();
-            applyGravityToAllBoxes();
+            var settled = applyGravityToAllBoxes();
             deselectBox();
             syncBoxesTo3D();
             renderInventoryList();
@@ -2291,7 +2286,11 @@ $$;</pre>
 
             if (supabaseClient && isSupabaseConnected) {
                 supabaseClient.from(INVENTORY_TABLE).delete().neq('id', '00000000-0000-0000-0000-000000000000').then(function() {
-                    cloudUpsertManyBoxes(boxes);
+                    var toSync = boxes.slice();
+                    settled.forEach(function(sb) {
+                        if (toSync.indexOf(sb) === -1) toSync.push(sb);
+                    });
+                    cloudUpsertManyBoxes(toSync);
                 });
             }
 
@@ -2311,6 +2310,7 @@ $$;</pre>
         window.addEventListener('DOMContentLoaded', function() {
             if (window.lucide) lucide.createIcons();
             initThreeJS();
+            applyGravityToAllBoxes();
             syncBoxesTo3D();
             renderInventoryList();
             updateStats();
