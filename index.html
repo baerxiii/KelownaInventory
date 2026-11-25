@@ -137,9 +137,15 @@
                 <i data-lucide="database" class="w-3.5 h-3.5"></i>
                 <span class="hidden md:inline">Sync / SQL</span>
             </button>
-            <button onclick="exportData(false)" title="Export JSON Backup (Auto-downloads every hour)" class="h-8 w-8 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center justify-center transition">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            </button>
+            <div class="flex items-center bg-slate-800 rounded-lg border border-slate-700 overflow-hidden h-8">
+                <button onclick="exportData(false)" title="Download JSON Backup Now" class="h-full px-2 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition border-r border-slate-700">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                </button>
+                <button id="btn-auto-backup" onclick="toggleHourlyAutoBackup()" title="Hourly Auto-Download: ON (Click to Pause)" class="h-full px-2 hover:bg-slate-700 text-emerald-400 text-[10px] font-mono font-bold flex items-center gap-1 transition">
+                    <span id="auto-backup-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span>1H</span>
+                </button>
+            </div>
             <button onclick="confirmResetDemo()" title="Reset Sample Layout" class="hidden h-8 w-8 bg-slate-800/60 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 rounded-lg border border-slate-800 items-center justify-center transition">
                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
             </button>
@@ -432,12 +438,41 @@
                     <h2 class="text-sm font-bold text-white">Technician & 3rd-Party Activity Log</h2>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button type="button" onclick="toggleManualLogBoxForm()" class="text-[11px] bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-2 py-1 rounded-lg font-semibold transition">+ Log / Restore Box</button>
                     <button onclick="clearLogs()" class="text-[11px] text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-950/40">Clear</button>
                     <button onclick="closeModal('modal-logs')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
             </div>
+            <form id="manual-log-box-form" onsubmit="handleManualLogAndRestore(event)" class="hidden p-3 bg-slate-950/90 border-b border-slate-800 space-y-2 text-xs">
+                <div class="text-[10px] uppercase tracking-wider text-sky-400 font-semibold">Log Box Dimensions (With Optional Re-Add to Locker)</div>
+                <div class="grid grid-cols-12 gap-2">
+                    <input type="text" id="mlog-tag" maxlength="8" placeholder="Tag #" required class="col-span-3 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-mono font-bold uppercase text-center text-amber-300 outline-none">
+                    <input type="text" id="mlog-name" placeholder="Part Name" required class="col-span-9 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white outline-none">
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Width W (in)</label>
+                        <input type="number" id="mlog-w" value="24" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 font-mono text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Depth D (in)</label>
+                        <input type="number" id="mlog-d" value="18" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 font-mono text-white">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Height H (in)</label>
+                        <input type="number" id="mlog-h" value="16" min="1" max="120" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 font-mono text-white">
+                    </div>
+                </div>
+                <div class="flex items-center justify-between gap-2 pt-1">
+                    <label class="inline-flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="mlog-place-check" checked class="rounded bg-slate-800 border-slate-700 text-sky-500">
+                        <span>Also place box back in 3D locker</span>
+                    </label>
+                    <button type="submit" class="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg transition">Save &amp; Log</button>
+                </div>
+            </form>
             <div id="activity-log-list" class="p-4 overflow-y-auto space-y-2 flex-1"></div>
         </div>
     </div>
@@ -615,7 +650,21 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public."KelownaInventoryLogs";
   END IF;
 END
-$$;</pre>
+$$;
+
+-- 5. Optional dedicated table for automatic page-load & hourly JSON snapshots
+CREATE TABLE IF NOT EXISTS public."KelownaInventoryBackups" (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  trigger_reason text NOT NULL DEFAULT 'page-load',
+  box_count integer NOT NULL DEFAULT 0,
+  snapshot_json jsonb NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public."KelownaInventoryBackups" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access to KelownaInventoryBackups" ON public."KelownaInventoryBackups";
+CREATE POLICY "Allow full access to KelownaInventoryBackups"
+ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre>
                 </div>
             </div>
         </div>
@@ -640,6 +689,9 @@ $$;</pre>
         var SUPABASE_ANON_KEY = 'sb_publishable_a6YEwdDOpkZ6BI8pHXVPnQ_WlFMlHmf';
         var INVENTORY_TABLE = 'KelownaInventory';
         var LOGS_TABLE = 'KelownaInventoryLogs';
+        var BACKUPS_TABLE = 'KelownaInventoryBackups';
+        var LOCAL_ROLLING_BACKUP_KEY = 'kelowna_rolling_backups_v1';
+        var AUTO_BACKUP_ENABLED_KEY = 'kelowna_hourly_auto_backup_enabled';
 
         var LOCKER_SIZE = 120; // 10 feet = 120 inches
 
@@ -653,6 +705,7 @@ $$;</pre>
         var partDimensionMemory = {}; // { normalizedPartName: { w, d, h, color } }
         var manualDimOverride = false;
         var hourlyBackupTimer = null;
+        var isHourlyAutoBackupEnabled = true;
         var HIGHLIGHT_COLOR_HEX = '#facc15'; // High-visibility gold highlight for searched or selected boxes
 
         var supabaseClient = null;
@@ -968,12 +1021,107 @@ $$;</pre>
             showToast('Undid: ' + prevState.label, 'success');
         }
 
+        function buildBackupPayload(backupType) {
+            return {
+                exportedAt: new Date().toISOString(),
+                backupType: backupType || 'manual',
+                table: INVENTORY_TABLE,
+                lockerDimensionsInches: { w: LOCKER_SIZE, d: LOCKER_SIZE, h: LOCKER_SIZE },
+                boxCount: boxes.length,
+                boxes: boxes,
+                activityLogs: activityLogs
+            };
+        }
+
+        function saveRollingLocalBackup(backupType) {
+            try {
+                var payload = buildBackupPayload(backupType || 'rolling');
+                var raw = localStorage.getItem(LOCAL_ROLLING_BACKUP_KEY);
+                var list = raw ? JSON.parse(raw) : [];
+                if (!Array.isArray(list)) list = [];
+                list.unshift(payload);
+                if (list.length > 12) list = list.slice(0, 12);
+                localStorage.setItem(LOCAL_ROLLING_BACKUP_KEY, JSON.stringify(list));
+            } catch (e) {
+                console.warn('Rolling localStorage backup notice:', e.message);
+            }
+        }
+
+        function saveCloudSnapshotToSupabase(triggerReason) {
+            if (!supabaseClient || !isSupabaseConnected) return;
+            if (!boxes || boxes.length === 0) return;
+
+            var payload = buildBackupPayload(triggerReason || 'page-load');
+            supabaseClient
+                .from(BACKUPS_TABLE)
+                .insert({
+                    id: generateUuid(),
+                    trigger_reason: triggerReason || 'page-load',
+                    box_count: boxes.length,
+                    snapshot_json: payload,
+                    created_at: new Date().toISOString()
+                })
+                .then(function(res) {
+                    if (res.error) {
+                        // Fallback: if KelownaInventoryBackups table isn't created yet, store a compact JSON snapshot entry in KelownaInventoryLogs
+                        supabaseClient.from(LOGS_TABLE).insert({
+                            id: generateUuid(),
+                            timestamp_label: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            tech_name: 'Auto-Backup (' + (triggerReason || 'page-load') + ')',
+                            action_type: 'Cloud Snapshot (' + boxes.length + ' boxes)',
+                            tag_id: 'BAK',
+                            part_name: 'JSON Backup Snapshot',
+                            note: JSON.stringify(payload)
+                        }).then(function() {});
+                    }
+                });
+        }
+
+        function updateAutoBackupButtonUI() {
+            var btn = document.getElementById('btn-auto-backup');
+            var dot = document.getElementById('auto-backup-dot');
+            if (!btn || !dot) return;
+            if (isHourlyAutoBackupEnabled) {
+                btn.className = 'h-full px-2 hover:bg-slate-700 text-emerald-400 text-[10px] font-mono font-bold flex items-center gap-1 transition';
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
+                btn.title = 'Hourly Auto-Download: ON (Click to Pause)';
+            } else {
+                btn.className = 'h-full px-2 hover:bg-slate-700 text-slate-400 text-[10px] font-mono font-bold flex items-center gap-1 transition';
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-slate-500';
+                btn.title = 'Hourly Auto-Download: PAUSED (Click to Resume)';
+            }
+        }
+
+        function toggleHourlyAutoBackup() {
+            isHourlyAutoBackupEnabled = !isHourlyAutoBackupEnabled;
+            try {
+                localStorage.setItem(AUTO_BACKUP_ENABLED_KEY, isHourlyAutoBackupEnabled ? '1' : '0');
+            } catch (e) {}
+            updateAutoBackupButtonUI();
+            showToast(
+                isHourlyAutoBackupEnabled
+                    ? 'Hourly JSON auto-download resumed (also saving rolling local + Supabase snapshots).'
+                    : 'Hourly JSON auto-download paused (rolling local + Supabase page-load backups remain active).',
+                'info'
+            );
+        }
+
         function startHourlyAutoBackup() {
+            try {
+                var savedPref = localStorage.getItem(AUTO_BACKUP_ENABLED_KEY);
+                if (savedPref === '0') isHourlyAutoBackupEnabled = false;
+            } catch (e) {}
+            updateAutoBackupButtonUI();
+
             if (hourlyBackupTimer) clearInterval(hourlyBackupTimer);
             var ONE_HOUR_MS = 60 * 60 * 1000;
             hourlyBackupTimer = setInterval(function() {
                 if (boxes && boxes.length > 0) {
-                    exportData(true);
+                    saveRollingLocalBackup('hourly-auto');
+                    saveCloudSnapshotToSupabase('hourly-auto');
+                    if (isHourlyAutoBackupEnabled) {
+                        exportData(true);
+                    }
                 }
             }, ONE_HOUR_MS);
         }
@@ -1188,6 +1336,33 @@ $$;</pre>
         }
 
         function mapRowToLog(row) {
+            var rawNote = row.note || '';
+            var cleanNote = rawNote;
+            var snapshot = null;
+            var markerIdx = rawNote.indexOf(' ||BOX_META:');
+            if (markerIdx !== -1) {
+                cleanNote = rawNote.slice(0, markerIdx).trim();
+                try {
+                    snapshot = JSON.parse(rawNote.slice(markerIdx + 12));
+                } catch (e) {}
+            } else {
+                // Fallback parser if dimensions like [24×18×16" | Pos X:8 Y:0 Z:8] are in the note
+                var dimMatch = rawNote.match(/\[(\d+)×(\d+)×(\d+)"(?:\s*\|\s*Pos X:(\d+) Y:(\d+) Z:(\d+))?\]/);
+                if (dimMatch) {
+                    snapshot = {
+                        tagId: row.tag_id || '00',
+                        partName: row.part_name || 'Equipment Item',
+                        partDescription: '',
+                        w: Number(dimMatch[1]),
+                        d: Number(dimMatch[2]),
+                        h: Number(dimMatch[3]),
+                        x: dimMatch[4] ? Number(dimMatch[4]) : 0,
+                        y: dimMatch[5] ? Number(dimMatch[5]) : 0,
+                        z: dimMatch[6] ? Number(dimMatch[6]) : 0,
+                        color: '#38bdf8'
+                    };
+                }
+            }
             return {
                 id: row.id,
                 time: row.timestamp_label || '',
@@ -1195,7 +1370,8 @@ $$;</pre>
                 action: row.action_type || 'Update',
                 tagId: row.tag_id || '--',
                 partName: row.part_name || '',
-                note: row.note || ''
+                note: cleanNote,
+                boxSnapshot: snapshot
             };
         }
 
@@ -1334,6 +1510,10 @@ $$;</pre>
                     pullLogsOnly();
                     subscribeRealtime();
 
+                    // Save a rolling localStorage backup & Supabase cloud JSON snapshot on every page load
+                    saveRollingLocalBackup('page-load');
+                    saveCloudSnapshotToSupabase('page-load');
+
                     if (notifyUser) {
                         showToast('Connected & synced with ' + INVENTORY_TABLE + '.', 'success');
                     }
@@ -1347,6 +1527,7 @@ $$;</pre>
 
         function cloudUpsertBox(box) {
             if (!box) return;
+            saveRollingLocalBackup('auto-change');
             if (!supabaseClient || !isSupabaseConnected) {
                 showToast('Connect Supabase (Sync / SQL) so changes save to the cloud.', 'warning');
                 return;
@@ -1358,6 +1539,7 @@ $$;</pre>
 
         function cloudUpsertManyBoxes(boxList) {
             if (!boxList || boxList.length === 0) return;
+            saveRollingLocalBackup('auto-change');
             if (!supabaseClient || !isSupabaseConnected) {
                 showToast('Connect Supabase (Sync / SQL) so changes save to the cloud.', 'warning');
                 return;
@@ -1380,6 +1562,10 @@ $$;</pre>
 
         function cloudInsertLog(entry) {
             if (!supabaseClient || !isSupabaseConnected) return;
+            var serializedNote = entry.note || '';
+            if (entry.boxSnapshot) {
+                serializedNote += ' ||BOX_META:' + JSON.stringify(entry.boxSnapshot);
+            }
             supabaseClient.from(LOGS_TABLE).insert({
                 id: entry.id,
                 timestamp_label: entry.time,
@@ -1387,7 +1573,7 @@ $$;</pre>
                 action_type: entry.action,
                 tag_id: entry.tagId,
                 part_name: entry.partName,
-                note: entry.note
+                note: serializedNote
             }).then(function(res) {
                 if (res.error) console.warn('Log sync error:', res.error.message);
             });
@@ -2312,7 +2498,7 @@ $$;</pre>
             savePartDimensionMemory(newBox.partName, newBox.w, newBox.d, newBox.h, newBox.color);
             rebuildPartDimensionMemory();
             cloudUpsertBox(newBox);
-            recordActivity('Self (Lead Tech)', 'Added Box to Locker', newBox.tagId, newBox.partName, 'Placed at X:' + pos.x + '" Y:' + pos.y + '" Z:' + pos.z + '"');
+            recordActivity('Self (Lead Tech)', 'Added Box to Locker', newBox.tagId, newBox.partName, 'Added to locker', newBox);
 
             closeModal('modal-add');
             document.getElementById('add-box-form').reset();
@@ -2549,6 +2735,7 @@ $$;</pre>
 
             pushUndoState('Delete Box #' + (box.tagId || '00'));
 
+            var removedSnapshot = Object.assign({}, box);
             var removedId = box.id;
             var removedTag = box.tagId;
             var removedName = box.partName;
@@ -2562,7 +2749,7 @@ $$;</pre>
             cloudDeleteBox(removedId);
             if (droppedBoxes.length > 0) cloudUpsertManyBoxes(droppedBoxes);
 
-            recordActivity('Self (Lead Tech)', 'Removed Box from Locker', removedTag, removedName, 'Deleted from locker');
+            recordActivity('Self (Lead Tech)', 'Removed Box from Locker', removedTag, removedName, 'Deleted from locker', removedSnapshot);
             syncBoxesTo3D();
             renderInventoryList();
             updateStats();
@@ -2577,7 +2764,7 @@ $$;</pre>
             var action = document.getElementById('log-action-select').value;
             var note = document.getElementById('log-note-input').value.trim();
 
-            recordActivity(tech, action, box.tagId, box.partName, note || 'Field update');
+            recordActivity(tech, action, box.tagId, box.partName, note || 'Field update', box);
             document.getElementById('log-note-input').value = '';
 
             if (action.indexOf('Removed') !== -1) {
@@ -2598,10 +2785,31 @@ $$;</pre>
             showToast('Logged ' + action + ' by ' + tech + '.', 'success');
         }
 
-        function recordActivity(tech, action, tagId, partName, note) {
+        function recordActivity(tech, action, tagId, partName, note, boxSnapshot) {
             var now = new Date();
             var timeStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
                           now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            var snapshot = null;
+            if (boxSnapshot && typeof boxSnapshot === 'object') {
+                snapshot = {
+                    tagId: String(boxSnapshot.tagId || tagId || '00').slice(0, 8),
+                    partName: boxSnapshot.partName || partName || 'Equipment Item',
+                    partDescription: boxSnapshot.partDescription || '',
+                    w: Number(boxSnapshot.w) || 18,
+                    d: Number(boxSnapshot.d) || 18,
+                    h: Number(boxSnapshot.h) || 12,
+                    x: Number(boxSnapshot.x) || 0,
+                    y: Number(boxSnapshot.y) || 0,
+                    z: Number(boxSnapshot.z) || 0,
+                    color: boxSnapshot.color || '#38bdf8'
+                };
+            }
+
+            var dimTag = snapshot
+                ? '[' + snapshot.w + '×' + snapshot.d + '×' + snapshot.h + '" | Pos X:' + snapshot.x + ' Y:' + snapshot.y + ' Z:' + snapshot.z + ']'
+                : '';
+            var displayNote = [note || '', dimTag].filter(Boolean).join(' ');
 
             var entry = {
                 id: generateUuid(),
@@ -2610,7 +2818,8 @@ $$;</pre>
                 action: action,
                 tagId: tagId || '--',
                 partName: partName,
-                note: note || ''
+                note: displayNote,
+                boxSnapshot: snapshot
             };
 
             activityLogs.unshift(entry);
@@ -2620,6 +2829,105 @@ $$;</pre>
             if (!document.getElementById('modal-logs').classList.contains('hidden')) {
                 renderActivityLogs();
             }
+        }
+
+        function toggleManualLogBoxForm() {
+            var f = document.getElementById('manual-log-box-form');
+            if (f) f.classList.toggle('hidden');
+        }
+
+        function handleManualLogAndRestore(event) {
+            event.preventDefault();
+            var tagId = (document.getElementById('mlog-tag').value || '').trim().toUpperCase().slice(0, 8) || '00';
+            var partName = (document.getElementById('mlog-name').value || '').trim() || 'Equipment Item';
+            var w = Math.max(1, Math.min(LOCKER_SIZE, parseInt(document.getElementById('mlog-w').value, 10) || 18));
+            var d = Math.max(1, Math.min(LOCKER_SIZE, parseInt(document.getElementById('mlog-d').value, 10) || 18));
+            var h = Math.max(1, Math.min(LOCKER_SIZE, parseInt(document.getElementById('mlog-h').value, 10) || 12));
+            var shouldPlace = document.getElementById('mlog-place-check').checked;
+
+            var pos = shouldPlace ? findSmartPosition(w, d, h, null) : { x: 0, y: 0, z: 0 };
+            var boxObj = {
+                id: generateUuid(),
+                tagId: tagId,
+                partName: partName,
+                partDescription: '',
+                w: w,
+                d: d,
+                h: h,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                color: '#38bdf8'
+            };
+
+            if (shouldPlace) {
+                pushUndoState('Restore Box #' + tagId);
+                boxes.push(boxObj);
+                var settled = applyGravityToAllBoxes();
+                if (settled.indexOf(boxObj) === -1) settled.push(boxObj);
+                savePartDimensionMemory(boxObj.partName, boxObj.w, boxObj.d, boxObj.h, boxObj.color);
+                rebuildPartDimensionMemory();
+                cloudUpsertManyBoxes(settled);
+                recordActivity('Self (Lead Tech)', 'Re-Added Box from Log', tagId, partName, 'Logged & restored to locker', boxObj);
+                syncBoxesTo3D();
+                renderInventoryList();
+                updateStats();
+                showToast('Logged & placed Box #' + tagId + ' (' + w + '×' + d + '×' + h + '") in locker.', 'success');
+            } else {
+                recordActivity('Self (Lead Tech)', 'Logged Box Dimensions', tagId, partName, 'Manual dimension record', boxObj);
+                showToast('Logged Box #' + tagId + ' dimensions (' + w + '×' + d + '×' + h + '").', 'info');
+            }
+
+            document.getElementById('manual-log-box-form').reset();
+            document.getElementById('mlog-place-check').checked = true;
+            document.getElementById('manual-log-box-form').classList.add('hidden');
+        }
+
+        function reAddBoxFromLog(logId) {
+            var entry = activityLogs.find(function(l) { return l.id === logId; });
+            if (!entry || !entry.boxSnapshot) {
+                showToast('No saved box dimensions on this log entry.', 'warning');
+                return;
+            }
+
+            var snap = entry.boxSnapshot;
+            pushUndoState('Re-Add Box #' + (snap.tagId || '00'));
+
+            // Try original coordinates first if free; otherwise smart auto-place
+            var pos = { x: snap.x || 0, y: snap.y || 0, z: snap.z || 0 };
+            if (!isValidPlacement({ x: pos.x, y: pos.y, z: pos.z, w: snap.w, d: snap.d, h: snap.h }, null)) {
+                pos = findSmartPosition(snap.w, snap.d, snap.h, null);
+            }
+
+            var restoredBox = {
+                id: generateUuid(),
+                tagId: snap.tagId || entry.tagId || '00',
+                partName: snap.partName || entry.partName || 'Restored Item',
+                partDescription: snap.partDescription || '',
+                w: snap.w,
+                d: snap.d,
+                h: snap.h,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                color: snap.color || '#38bdf8'
+            };
+
+            boxes.push(restoredBox);
+            var settled = applyGravityToAllBoxes();
+            if (settled.indexOf(restoredBox) === -1) settled.push(restoredBox);
+
+            savePartDimensionMemory(restoredBox.partName, restoredBox.w, restoredBox.d, restoredBox.h, restoredBox.color);
+            rebuildPartDimensionMemory();
+            cloudUpsertManyBoxes(settled);
+            recordActivity('Self (Lead Tech)', 'Re-Added Box from Log', restoredBox.tagId, restoredBox.partName, 'Restored from Tech Log', restoredBox);
+
+            closeModal('modal-logs');
+            selectBox(restoredBox.id, true);
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+            showToast('Re-added Box #' + restoredBox.tagId + ' (' + restoredBox.w + '×' + restoredBox.d + '×' + restoredBox.h + '") to locker.', 'success');
         }
 
         function renderActivityLogs() {
@@ -2635,20 +2943,38 @@ $$;</pre>
                     ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                     : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
 
+                var snap = item.boxSnapshot;
+                var dimBadgeHtml = snap
+                    ? '<span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-emerald-300 border border-slate-700">' + snap.w + '×' + snap.d + '×' + snap.h + '"</span>'
+                    : '';
+                var reAddBtnHtml = snap
+                    ? '<button type="button" onclick="reAddBoxFromLog(\x27' + item.id + '\x27)" class="px-2 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 text-[10px] font-bold flex items-center gap-1 transition shrink-0" title="Re-add this box with its saved dimensions">' +
+                          '<i data-lucide="rotate-ccw" class="w-3 h-3"></i>' +
+                          '<span>Re-Add Box</span>' +
+                      '</button>'
+                    : '';
+
                 return (
-                    '<div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1">' +
+                    '<div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1.5">' +
                         '<div class="flex items-center justify-between gap-2">' +
-                            '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + badgeClass + '">' + escapeHtml(item.tech) + '</span>' +
+                            '<div class="flex items-center gap-1.5 flex-wrap">' +
+                                '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + badgeClass + '">' + escapeHtml(item.tech) + '</span>' +
+                                dimBadgeHtml +
+                            '</div>' +
                             '<span class="text-[10px] font-mono text-slate-500">' + escapeHtml(item.time) + '</span>' +
                         '</div>' +
-                        '<div class="font-medium text-slate-200">' +
-                            '<span class="font-mono font-bold text-amber-400 mr-1">#' + escapeHtml(item.tagId) + '</span>' +
-                            escapeHtml(item.action) + ': <span class="text-white font-semibold">' + escapeHtml(item.partName) + '</span>' +
+                        '<div class="flex items-center justify-between gap-2">' +
+                            '<div class="font-medium text-slate-200">' +
+                                '<span class="font-mono font-bold text-amber-400 mr-1">#' + escapeHtml(item.tagId) + '</span>' +
+                                escapeHtml(item.action) + ': <span class="text-white font-semibold">' + escapeHtml(item.partName) + '</span>' +
+                            '</div>' +
+                            reAddBtnHtml +
                         '</div>' +
                         (item.note ? '<div class="text-[11px] text-slate-400 italic">"' + escapeHtml(item.note) + '"</div>' : '') +
                     '</div>'
                 );
             }).join('');
+            if (window.lucide) lucide.createIcons();
         }
 
         function clearLogs() {
@@ -2738,14 +3064,9 @@ $$;</pre>
             var stamp = isAutoHourly
                 ? nowIso.slice(0, 13).replace('T', '_') + '00'
                 : nowIso.slice(0, 10);
-            var payload = {
-                exportedAt: nowIso,
-                backupType: isAutoHourly ? 'hourly-auto' : 'manual',
-                table: INVENTORY_TABLE,
-                lockerDimensionsInches: { w: LOCKER_SIZE, d: LOCKER_SIZE, h: LOCKER_SIZE },
-                boxes: boxes,
-                activityLogs: activityLogs
-            };
+            var payload = buildBackupPayload(isAutoHourly ? 'hourly-auto' : 'manual');
+            payload.exportedAt = nowIso;
+            saveRollingLocalBackup(isAutoHourly ? 'hourly-auto' : 'manual');
             var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
