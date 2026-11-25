@@ -125,6 +125,10 @@
                 <i data-lucide="palette" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Box Colors</span>
             </button>
+            <button onclick="openModal('modal-studio')" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition" title="Paint Locker Floor & Side Wall Backgrounds">
+                <i data-lucide="paintbrush" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Floor &amp; Walls</span>
+            </button>
             <button id="btn-undo" onclick="undoLastAction()" disabled title="Undo Last Move or Delete" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none text-amber-300 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
                 <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Undo</span>
@@ -184,6 +188,44 @@
                     <button type="button" onclick="setLabelDisplayMode('selected')" class="lbl-mode-btn h-7 px-2.5 rounded-lg text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30 transition" data-mode="selected" title="Show floating callouts only for selected/checked boxes; keep IDs on boxes">Selected Only</button>
                     <button type="button" onclick="setLabelDisplayMode('all')" class="lbl-mode-btn h-7 px-2.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition" data-mode="all" title="Show floating callouts on all boxes">All Labels</button>
                 </div>
+            </div>
+
+            <!-- Active Floor Paint Mode Indicator -->
+            <div id="floor-paint-banner" class="hidden absolute top-14 left-3 z-10 bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Floor Paint Mode Active — Click or drag on floor tiles</span>
+                <button type="button" onclick="setFloorPaintMode(false)" class="ml-1 px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-[11px] text-white">Done</button>
+            </div>
+
+            <!-- Active Free Move Mode Banner -->
+            <div id="free-move-banner" class="hidden absolute top-14 left-3 z-10 bg-sky-950/95 border border-sky-400/50 text-sky-100 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg">
+                <span class="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse"></span>
+                <span id="free-move-label">Free Move Active — Drag box or nudge</span>
+                <button type="button" onclick="nudgeFreeMoveBox(-6, 0)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono" title="Move Left (-X)">←</button>
+                <button type="button" onclick="nudgeFreeMoveBox(6, 0)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono" title="Move Right (+X)">→</button>
+                <button type="button" onclick="nudgeFreeMoveBox(0, -6)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono" title="Move Back (-Z)">↑</button>
+                <button type="button" onclick="nudgeFreeMoveBox(0, 6)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono" title="Move Front (+Z)">↓</button>
+                <button type="button" onclick="finishFreeMoveMode()" class="ml-1 px-2 py-0.5 rounded bg-sky-500 hover:bg-sky-400 text-slate-950 text-[11px] font-bold">Done</button>
+            </div>
+
+            <!-- Tap-to-Select Box Action Dialog (Move or Edit) -->
+            <div id="box-action-sheet" class="hidden absolute bottom-14 left-1/2 -translate-x-1/2 z-20 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-2xl px-3 py-2.5 shadow-2xl flex items-center gap-2.5 max-w-[94vw]">
+                <span id="box-action-tag" class="font-mono font-bold text-xs px-2 py-1 rounded-lg bg-amber-500 text-slate-950 shrink-0">#01</span>
+                <div class="min-w-0 mr-1">
+                    <div id="box-action-name" class="text-xs font-bold text-white truncate max-w-[140px] sm:max-w-[200px]">Part Name</div>
+                    <div id="box-action-pos" class="text-[10px] font-mono text-slate-400">X:0" Y:0" Z:0"</div>
+                </div>
+                <button type="button" onclick="startFreeMoveForTappedBox()" class="h-8 px-3 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1.5 shrink-0 transition">
+                    <i data-lucide="move" class="w-3.5 h-3.5"></i>
+                    <span>Move</span>
+                </button>
+                <button type="button" onclick="openEditorForTappedBox()" class="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 shrink-0 transition">
+                    <i data-lucide="pencil" class="w-3.5 h-3.5 text-sky-400"></i>
+                    <span>Edit</span>
+                </button>
+                <button type="button" onclick="dismissBoxActionSheet()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 shrink-0" title="Close">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
             </div>
 
             <!-- Bottom-Left Legend -->
@@ -488,7 +530,102 @@
         </div>
     </div>
 
-    <!-- MODAL 4: BULK & MULTI-SELECT BOX COLORS -->
+    <!-- MODAL: FLOOR PAINT & SIDE WALL BACKGROUNDS -->
+    <div id="modal-studio" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="paintbrush" class="w-4 h-4 text-emerald-400"></i>
+                    <h2 class="text-sm font-bold text-white">Floor Paint &amp; Side Wall Backgrounds</h2>
+                </div>
+                <button onclick="closeModal('modal-studio')" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="p-4 overflow-y-auto space-y-4 text-xs">
+                <!-- Floor Painting Section -->
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-white">1. Paint Locker Floor</span>
+                        <span id="studio-tile-count" class="font-mono text-[11px] text-emerald-400">0 painted tiles</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Set the base floor color or toggle Tile Brush to paint individual 12"×12" floor squares directly in 3D.</p>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input type="color" id="floor-paint-color" value="#10b981" onchange="handleFloorColorPick(this.value)" class="w-10 h-8 rounded border border-slate-700 bg-slate-900 cursor-pointer">
+                        <button type="button" onclick="setFloorPaintSwatch('#1e293b')" class="w-5 h-5 rounded-full bg-[#1e293b] border border-slate-600" title="Default Slate"></button>
+                        <button type="button" onclick="setFloorPaintSwatch('#10b981')" class="w-5 h-5 rounded-full bg-[#10b981]" title="Emerald Safe Zone"></button>
+                        <button type="button" onclick="setFloorPaintSwatch('#f59e0b')" class="w-5 h-5 rounded-full bg-[#f59e0b]" title="Amber Caution"></button>
+                        <button type="button" onclick="setFloorPaintSwatch('#0284c7')" class="w-5 h-5 rounded-full bg-[#0284c7]" title="Depot Blue"></button>
+                        <button type="button" onclick="setFloorPaintSwatch('#e11d48')" class="w-5 h-5 rounded-full bg-[#e11d48]" title="Restricted Red"></button>
+                        <button type="button" onclick="applyBaseFloorColor()" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg font-semibold transition">Paint Full Floor</button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <button type="button" id="btn-toggle-floor-brush" onclick="toggleFloorPaintModeFromModal()" class="h-8 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition">Start Tile Brush</button>
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="btn-erase-tile" onclick="toggleEraseTileMode()" class="h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-lg font-semibold transition">Eraser: OFF</button>
+                            <button type="button" onclick="clearAllFloorTiles()" class="h-8 px-2.5 bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 border border-rose-800/60 rounded-lg font-semibold transition">Clear Tiles</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Side Wall Backgrounds Section -->
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-white">2. Side Wall Backgrounds</span>
+                        <span class="text-[10px] font-mono text-slate-400">Left &amp; Right Walls</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Target Side Wall</label>
+                            <select id="wall-target-select" onchange="syncWallControlsFromState()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 h-8 text-xs text-white outline-none">
+                                <option value="both">Both Side Walls (Left + Right)</option>
+                                <option value="left">Left Wall Only</option>
+                                <option value="right">Right Wall Only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase text-slate-400 font-semibold mb-1">Backdrop Preset</label>
+                            <select id="wall-preset-select" onchange="applyWallPreset(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 h-8 text-xs text-white outline-none">
+                                <option value="blueprint">Depot Blueprint Grid</option>
+                                <option value="hazard">Safety Stripe Border</option>
+                                <option value="slate">Clean Depot Slate</option>
+                                <option value="custom">Custom Uploaded Image</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-slate-400">Wall Tint:</span>
+                            <input type="color" id="wall-tint-color" value="#1e293b" onchange="applyWallTintAndOpacity()" class="w-8 h-7 rounded border border-slate-700 bg-slate-900 cursor-pointer">
+                        </div>
+                        <label class="px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-semibold cursor-pointer">
+                            <span>Upload Wall Image</span>
+                            <input type="file" accept="image/*" onchange="handleSideWallImageUpload(event)" class="hidden">
+                        </label>
+                    </div>
+
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-mono">
+                            <span class="text-slate-400">Side Wall Opacity</span>
+                            <span id="wall-opacity-val" class="text-white">35%</span>
+                        </div>
+                        <input type="range" id="wall-opacity-slider" min="5" max="95" value="35" oninput="applyWallTintAndOpacity()">
+                    </div>
+
+                    <div class="flex justify-end pt-1">
+                        <button type="button" onclick="resetSideWallBackgrounds()" class="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg font-semibold transition">Reset Side Walls</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- MODAL 4: BULK & MULTI-SELECT BOX COLORS -->
     <div id="modal-colors" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
             <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
@@ -1693,17 +1830,368 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             animate();
         }
 
+        var STUDIO_STORAGE_KEY = 'kelowna_locker_studio_v1';
+        var floorMesh = null;
+        var paintedTilesGroup = null;
+        var leftWallMesh = null;
+        var rightWallMesh = null;
+        var isFloorPaintMode = false;
+        var isEraseTileMode = false;
+        var isPaintingFloorDrag = false;
+        var lastPaintedCellKey = '';
+
+        var lockerStudioState = {
+            baseFloorColor: '#1e293b',
+            paintColor: '#10b981',
+            paintedTiles: {}, // { "gx_gz": "#hex" } where gx, gz in 0..9 (12" each)
+            leftWall: { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' },
+            rightWall: { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' }
+        };
+
+        function loadLockerStudioState() {
+            try {
+                var raw = localStorage.getItem(STUDIO_STORAGE_KEY);
+                if (raw) {
+                    var parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        lockerStudioState.baseFloorColor = parsed.baseFloorColor || '#1e293b';
+                        lockerStudioState.paintColor = parsed.paintColor || '#10b981';
+                        lockerStudioState.paintedTiles = (parsed.paintedTiles && typeof parsed.paintedTiles === 'object') ? parsed.paintedTiles : {};
+                        if (parsed.leftWall) lockerStudioState.leftWall = Object.assign({}, lockerStudioState.leftWall, parsed.leftWall);
+                        if (parsed.rightWall) lockerStudioState.rightWall = Object.assign({}, lockerStudioState.rightWall, parsed.rightWall);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function saveLockerStudioState() {
+            try {
+                localStorage.setItem(STUDIO_STORAGE_KEY, JSON.stringify(lockerStudioState));
+            } catch (e) {
+                console.warn('Studio storage notice:', e.message);
+            }
+            updateStudioTileCountUI();
+        }
+
+        function updateStudioTileCountUI() {
+            var el = document.getElementById('studio-tile-count');
+            if (!el) return;
+            var count = Object.keys(lockerStudioState.paintedTiles || {}).length;
+            el.textContent = count + ' painted tile' + (count === 1 ? '' : 's');
+        }
+
+        function setFloorPaintSwatch(hex) {
+            lockerStudioState.paintColor = hex;
+            var inp = document.getElementById('floor-paint-color');
+            if (inp) inp.value = hex;
+            saveLockerStudioState();
+        }
+
+        function handleFloorColorPick(hex) {
+            lockerStudioState.paintColor = hex || '#10b981';
+            saveLockerStudioState();
+        }
+
+        function applyBaseFloorColor() {
+            var inp = document.getElementById('floor-paint-color');
+            var hex = (inp && inp.value) || lockerStudioState.paintColor || '#1e293b';
+            lockerStudioState.baseFloorColor = hex;
+            if (floorMesh && floorMesh.material) {
+                floorMesh.material.color.set(hex);
+            }
+            saveLockerStudioState();
+            showToast('Painted locker floor base color.', 'success');
+        }
+
+        function setFloorPaintMode(active) {
+            isFloorPaintMode = Boolean(active);
+            if (!isFloorPaintMode) {
+                isPaintingFloorDrag = false;
+                lastPaintedCellKey = '';
+                if (controls) controls.enabled = true;
+            } else {
+                if (controls) controls.enabled = false;
+            }
+            var banner = document.getElementById('floor-paint-banner');
+            if (banner) {
+                if (isFloorPaintMode) banner.classList.remove('hidden');
+                else banner.classList.add('hidden');
+            }
+            var btn = document.getElementById('btn-toggle-floor-brush');
+            if (btn) {
+                btn.textContent = isFloorPaintMode ? 'Stop Tile Brush' : 'Start Tile Brush';
+            }
+        }
+
+        function toggleFloorPaintModeFromModal() {
+            var next = !isFloorPaintMode;
+            closeModal('modal-studio');
+            setFloorPaintMode(next);
+            if (next) {
+                showToast('Click or drag on the locker floor to paint 12"×12" tiles.', 'info');
+            }
+        }
+
+        function toggleEraseTileMode() {
+            isEraseTileMode = !isEraseTileMode;
+            var btn = document.getElementById('btn-erase-tile');
+            if (btn) {
+                btn.textContent = 'Eraser: ' + (isEraseTileMode ? 'ON' : 'OFF');
+                btn.className = isEraseTileMode
+                    ? 'h-8 px-2.5 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-lg font-bold transition'
+                    : 'h-8 px-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-lg font-semibold transition';
+            }
+        }
+
+        function clearAllFloorTiles() {
+            lockerStudioState.paintedTiles = {};
+            saveLockerStudioState();
+            rebuildPaintedFloorTiles3D();
+            showToast('Cleared all painted floor tiles.', 'info');
+        }
+
+        function rebuildPaintedFloorTiles3D() {
+            if (!paintedTilesGroup) return;
+            while (paintedTilesGroup.children.length > 0) {
+                paintedTilesGroup.remove(paintedTilesGroup.children[0]);
+            }
+
+            var cellSize = LOCKER_SIZE / 10; // 12" per tile
+            var half = LOCKER_SIZE / 2;
+            var tileGeo = new THREE.PlaneGeometry(cellSize - 0.3, cellSize - 0.3);
+
+            Object.keys(lockerStudioState.paintedTiles || {}).forEach(function(key) {
+                var hex = lockerStudioState.paintedTiles[key];
+                var parts = key.split('_');
+                var gx = parseInt(parts[0], 10);
+                var gz = parseInt(parts[1], 10);
+                if (isNaN(gx) || isNaN(gz) || gx < 0 || gx > 9 || gz < 0 || gz > 9) return;
+
+                var tileMesh = new THREE.Mesh(
+                    tileGeo,
+                    new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(hex || '#10b981'),
+                        roughness: 0.75,
+                        metalness: 0.05
+                    })
+                );
+                tileMesh.rotation.x = -Math.PI / 2;
+                tileMesh.position.set(
+                    (gx * cellSize) + (cellSize / 2) - half,
+                    0.22,
+                    (gz * cellSize) + (cellSize / 2) - half
+                );
+                tileMesh.receiveShadow = true;
+                paintedTilesGroup.add(tileMesh);
+            });
+            updateStudioTileCountUI();
+        }
+
+        function paintFloorAtClientCoords(clientX, clientY) {
+            if (!floorMesh || !camera || !renderer) return;
+            var rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            var floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            var pt = new THREE.Vector3();
+            if (!raycaster.ray.intersectPlane(floorPlane, pt)) return;
+
+            var half = LOCKER_SIZE / 2;
+            var localX = pt.x + half;
+            var localZ = pt.z + half;
+            if (localX < 0 || localX >= LOCKER_SIZE || localZ < 0 || localZ >= LOCKER_SIZE) return;
+
+            var cellSize = LOCKER_SIZE / 10;
+            var gx = Math.max(0, Math.min(9, Math.floor(localX / cellSize)));
+            var gz = Math.max(0, Math.min(9, Math.floor(localZ / cellSize)));
+            var key = gx + '_' + gz;
+            if (key === lastPaintedCellKey) return;
+            lastPaintedCellKey = key;
+
+            if (isEraseTileMode) {
+                delete lockerStudioState.paintedTiles[key];
+            } else {
+                lockerStudioState.paintedTiles[key] = lockerStudioState.paintColor || '#10b981';
+            }
+            saveLockerStudioState();
+            rebuildPaintedFloorTiles3D();
+        }
+
+        function createWallBackdropTexture(cfg, sideLabel) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            var ctx = canvas.getContext('2d');
+            var tint = cfg.tint || '#1e293b';
+
+            ctx.fillStyle = tint;
+            ctx.fillRect(0, 0, 512, 512);
+
+            if (cfg.preset === 'blueprint') {
+                ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+                ctx.lineWidth = 2;
+                for (var i = 0; i <= 512; i += 64) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+                }
+                ctx.font = 'bold 26px Inter, sans-serif';
+                ctx.fillStyle = 'rgba(226, 232, 240, 0.55)';
+                ctx.textAlign = 'center';
+                ctx.fillText(sideLabel + ' • 10ft × 10ft', 256, 476);
+            } else if (cfg.preset === 'hazard') {
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.35)';
+                for (var x = -512; x < 1024; x += 48) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 456);
+                    ctx.lineTo(x + 24, 456);
+                    ctx.lineTo(x + 68, 512);
+                    ctx.lineTo(x + 44, 512);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+
+            var tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        function applySideWallMaterials3D() {
+            var sides = [
+                { key: 'leftWall', mesh: leftWallMesh, label: 'LEFT WALL' },
+                { key: 'rightWall', mesh: rightWallMesh, label: 'RIGHT WALL' }
+            ];
+
+            sides.forEach(function(item) {
+                if (!item.mesh) return;
+                var cfg = lockerStudioState[item.key];
+                var mat = item.mesh.material;
+                mat.transparent = true;
+                mat.opacity = Math.max(0.05, Math.min(0.95, Number(cfg.opacity) || 0.35));
+                mat.side = THREE.DoubleSide;
+                mat.depthWrite = false;
+
+                if (cfg.preset === 'custom' && cfg.customDataUrl) {
+                    var img = new Image();
+                    img.onload = function() {
+                        var imgTex = new THREE.Texture(img);
+                        imgTex.needsUpdate = true;
+                        mat.map = imgTex;
+                        mat.color.set('#ffffff');
+                        mat.needsUpdate = true;
+                    };
+                    img.src = cfg.customDataUrl;
+                } else {
+                    if (mat.map) {
+                        mat.map.dispose();
+                        mat.map = null;
+                    }
+                    if (cfg.preset === 'slate') {
+                        mat.color.set(cfg.tint || '#1e293b');
+                    } else {
+                        mat.map = createWallBackdropTexture(cfg, item.label);
+                        mat.color.set('#ffffff');
+                    }
+                    mat.needsUpdate = true;
+                }
+            });
+        }
+
+        function getSelectedWallTargets() {
+            var sel = document.getElementById('wall-target-select');
+            var val = sel ? sel.value : 'both';
+            if (val === 'left') return ['leftWall'];
+            if (val === 'right') return ['rightWall'];
+            return ['leftWall', 'rightWall'];
+        }
+
+        function syncWallControlsFromState() {
+            var targets = getSelectedWallTargets();
+            var cfg = lockerStudioState[targets[0]] || lockerStudioState.leftWall;
+            var presetSel = document.getElementById('wall-preset-select');
+            var tintInp = document.getElementById('wall-tint-color');
+            var opSlider = document.getElementById('wall-opacity-slider');
+            var opVal = document.getElementById('wall-opacity-val');
+            var pct = Math.round((cfg.opacity || 0.35) * 100);
+
+            if (presetSel) presetSel.value = cfg.preset || 'blueprint';
+            if (tintInp) tintInp.value = cfg.tint || '#1e293b';
+            if (opSlider) opSlider.value = pct;
+            if (opVal) opVal.textContent = pct + '%';
+        }
+
+        function applyWallPreset(preset) {
+            getSelectedWallTargets().forEach(function(k) {
+                lockerStudioState[k].preset = preset;
+            });
+            saveLockerStudioState();
+            applySideWallMaterials3D();
+        }
+
+        function applyWallTintAndOpacity() {
+            var tintInp = document.getElementById('wall-tint-color');
+            var opSlider = document.getElementById('wall-opacity-slider');
+            var opVal = document.getElementById('wall-opacity-val');
+            var pct = opSlider ? parseInt(opSlider.value, 10) : 35;
+            if (opVal) opVal.textContent = pct + '%';
+
+            getSelectedWallTargets().forEach(function(k) {
+                if (tintInp && tintInp.value) lockerStudioState[k].tint = tintInp.value;
+                lockerStudioState[k].opacity = pct / 100;
+                if (lockerStudioState[k].preset !== 'custom') {
+                    // keep current preset
+                }
+            });
+            saveLockerStudioState();
+            applySideWallMaterials3D();
+        }
+
+        function handleSideWallImageUpload(event) {
+            var file = event.target && event.target.files && event.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var dataUrl = e.target.result;
+                getSelectedWallTargets().forEach(function(k) {
+                    lockerStudioState[k].preset = 'custom';
+                    lockerStudioState[k].customDataUrl = dataUrl;
+                });
+                var presetSel = document.getElementById('wall-preset-select');
+                if (presetSel) presetSel.value = 'custom';
+                saveLockerStudioState();
+                applySideWallMaterials3D();
+                showToast('Applied custom background image to side wall.', 'success');
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function resetSideWallBackgrounds() {
+            lockerStudioState.leftWall = { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' };
+            lockerStudioState.rightWall = { preset: 'blueprint', tint: '#1e293b', opacity: 0.35, customDataUrl: '' };
+            saveLockerStudioState();
+            syncWallControlsFromState();
+            applySideWallMaterials3D();
+            showToast('Reset side wall backgrounds to default.', 'info');
+        }
+
         function buildLockerStructure() {
             var size = LOCKER_SIZE;
             var half = size / 2;
 
-            var floor = new THREE.Mesh(
+            floorMesh = new THREE.Mesh(
                 new THREE.PlaneGeometry(size, size),
-                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.1 })
+                new THREE.MeshStandardMaterial({ color: new THREE.Color(lockerStudioState.baseFloorColor || '#1e293b'), roughness: 0.85, metalness: 0.1 })
             );
-            floor.rotation.x = -Math.PI / 2;
-            floor.receiveShadow = true;
-            lockerGroup.add(floor);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.receiveShadow = true;
+            lockerGroup.add(floorMesh);
+
+            paintedTilesGroup = new THREE.Group();
+            lockerGroup.add(paintedTilesGroup);
+            rebuildPaintedFloorTiles3D();
 
             var gridHelper = new THREE.GridHelper(size, 10, 0x38bdf8, 0x334155);
             gridHelper.position.y = 0.15;
@@ -1738,15 +2226,17 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             backWall.position.set(0, half, -half);
             lockerGroup.add(backWall);
 
-            var leftWall = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat);
-            leftWall.rotation.y = Math.PI / 2;
-            leftWall.position.set(-half, half, 0);
-            lockerGroup.add(leftWall);
+            leftWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat.clone());
+            leftWallMesh.rotation.y = Math.PI / 2;
+            leftWallMesh.position.set(-half, half, 0);
+            lockerGroup.add(leftWallMesh);
 
-            var rightWall = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat);
-            rightWall.rotation.y = -Math.PI / 2;
-            rightWall.position.set(half, half, 0);
-            lockerGroup.add(rightWall);
+            rightWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), wallMat.clone());
+            rightWallMesh.rotation.y = -Math.PI / 2;
+            rightWallMesh.position.set(half, half, 0);
+            lockerGroup.add(rightWallMesh);
+
+            applySideWallMaterials3D();
 
             var edgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
             var wireframe = new THREE.LineSegments(edgesGeo, new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.65 }));
@@ -2004,14 +2494,137 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             return topY;
         }
 
+        var tappedBoxId = null;
+        var isFreeMoveMode = false;
+
+        function openBoxActionSheet(boxId) {
+            var box = boxes.find(function(b) { return b.id === boxId; });
+            if (!box) return;
+            tappedBoxId = box.id;
+            selectedBoxId = box.id;
+            syncBoxesTo3D();
+            renderInventoryList();
+
+            var sheet = document.getElementById('box-action-sheet');
+            if (!sheet) return;
+            document.getElementById('box-action-tag').textContent = '#' + (box.tagId || '00');
+            document.getElementById('box-action-name').textContent = box.partName || 'Item';
+            document.getElementById('box-action-pos').textContent = 'X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '"';
+            sheet.classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function dismissBoxActionSheet() {
+            var sheet = document.getElementById('box-action-sheet');
+            if (sheet) sheet.classList.add('hidden');
+            if (!isFreeMoveMode) {
+                tappedBoxId = null;
+            }
+        }
+
+        function openEditorForTappedBox() {
+            var id = tappedBoxId || selectedBoxId;
+            dismissBoxActionSheet();
+            stopFreeMoveState(false);
+            if (id) {
+                selectBox(id, false);
+            }
+        }
+
+        function updateFreeMoveBannerUI() {
+            var banner = document.getElementById('free-move-banner');
+            var lbl = document.getElementById('free-move-label');
+            if (!banner) return;
+            if (!isFreeMoveMode || !tappedBoxId) {
+                banner.classList.add('hidden');
+                return;
+            }
+            var box = boxes.find(function(b) { return b.id === tappedBoxId; });
+            if (box && lbl) {
+                lbl.textContent = 'Free Move #' + (box.tagId || '00') + ' (X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '")';
+            }
+            banner.classList.remove('hidden');
+        }
+
+        function startFreeMoveForTappedBox() {
+            var id = tappedBoxId || selectedBoxId;
+            var box = boxes.find(function(b) { return b.id === id; });
+            if (!box) return;
+            tappedBoxId = box.id;
+            selectedBoxId = box.id;
+            isFreeMoveMode = true;
+            var sheet = document.getElementById('box-action-sheet');
+            if (sheet) sheet.classList.add('hidden');
+            pushUndoState('Free Move Box #' + (box.tagId || '00'));
+            updateFreeMoveBannerUI();
+            syncBoxesTo3D();
+            showToast('Drag Box #' + box.tagId + ' or use arrows, then tap Done.', 'info');
+        }
+
+        function nudgeFreeMoveBox(dx, dz) {
+            if (!tappedBoxId) return;
+            var box = boxes.find(function(b) { return b.id === tappedBoxId; });
+            if (!box) return;
+            var prev = { x: box.x, y: box.y, z: box.z };
+            var targetX = Math.max(0, Math.min(LOCKER_SIZE - box.w, box.x + dx));
+            var targetZ = Math.max(0, Math.min(LOCKER_SIZE - box.d, box.z + dz));
+            var resolved = resolveCollisionAndStack(targetX, targetZ, box.w, box.d, box.h, box.id, prev, box.y);
+            box.x = resolved.x;
+            box.z = resolved.z;
+            box.y = resolved.y;
+            var settled = applyGravityToAllBoxes();
+            if (settled.indexOf(box) === -1) settled.push(box);
+            cloudUpsertManyBoxes(settled);
+            updateFreeMoveBannerUI();
+            syncBoxesTo3D();
+            renderInventoryList();
+            updateStats();
+        }
+
+        function stopFreeMoveState(clearSelection) {
+            isFreeMoveMode = false;
+            if (controls) controls.enabled = true;
+            var banner = document.getElementById('free-move-banner');
+            if (banner) banner.classList.add('hidden');
+            if (clearSelection) {
+                tappedBoxId = null;
+                selectedBoxId = null;
+                syncBoxesTo3D();
+                renderInventoryList();
+            }
+        }
+
+        function finishFreeMoveMode() {
+            var box = boxes.find(function(b) { return b.id === tappedBoxId; });
+            stopFreeMoveState(false);
+            if (box) {
+                var settled = applyGravityToAllBoxes();
+                if (settled.indexOf(box) === -1) settled.push(box);
+                cloudUpsertManyBoxes(settled);
+                renderInventoryList();
+                updateStats();
+                showToast('Saved Box #' + box.tagId + ' position at X:' + box.x + '" Y:' + box.y + '" Z:' + box.z + '".', 'success');
+            }
+        }
+
         function onPointerDown(event) {
             pointerDownPos = { x: event.clientX, y: event.clientY };
+            if (isFloorPaintMode) {
+                isPaintingFloorDrag = true;
+                lastPaintedCellKey = '';
+                paintFloorAtClientCoords(event.clientX, event.clientY);
+                return;
+            }
 
             var hit = getRaycastBoxHit(event.clientX, event.clientY);
             if (hit) {
                 var hitId = hit.object.userData.boxId;
                 var box = boxes.find(function(b) { return b.id === hitId; });
                 if (box) {
+                    if (isFreeMoveMode && box.id === tappedBoxId) {
+                        var sheetEl = document.getElementById('box-action-sheet');
+                        if (sheetEl) sheetEl.classList.add('hidden');
+                    }
                     isDraggingBox = true;
                     draggedBoxId = box.id;
                     dragStartCoords = { x: box.x, y: box.y, z: box.z };
@@ -2035,6 +2648,10 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
         }
 
         function onPointerMove(event) {
+            if (isFloorPaintMode && isPaintingFloorDrag) {
+                paintFloorAtClientCoords(event.clientX, event.clientY);
+                return;
+            }
             if (isDraggingBox && draggedBoxId) {
                 var box = boxes.find(function(b) { return b.id === draggedBoxId; });
                 if (!box) return;
@@ -2113,6 +2730,11 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
         }
 
         function onPointerUp(event) {
+            if (isFloorPaintMode) {
+                isPaintingFloorDrag = false;
+                lastPaintedCellKey = '';
+                return;
+            }
             var dist = Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y);
 
             if (isDraggingBox) {
@@ -2165,7 +2787,19 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                         }
                         if (dist <= 5) {
                             var hit = getRaycastBoxHit(event.clientX, event.clientY);
-                            if (hit) selectBox(hit.object.userData.boxId, false);
+                            if (hit) {
+                                var tappedId = hit.object.userData.boxId;
+                                if (isFreeMoveMode && tappedId === tappedBoxId) {
+                                    updateFreeMoveBannerUI();
+                                } else {
+                                    stopFreeMoveState(false);
+                                    openBoxActionSheet(tappedId);
+                                }
+                            } else {
+                                dismissBoxActionSheet();
+                            }
+                        } else if (isFreeMoveMode && box && box.id === tappedBoxId) {
+                            updateFreeMoveBannerUI();
                         }
                     }
                 }
@@ -3346,6 +3980,11 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
 
         window.addEventListener('DOMContentLoaded', function() {
             if (window.lucide) lucide.createIcons();
+            loadLockerStudioState();
+            updateStudioTileCountUI();
+            syncWallControlsFromState();
+            var fpInp = document.getElementById('floor-paint-color');
+            if (fpInp) fpInp.value = lockerStudioState.paintColor || '#10b981';
             initThreeJS();
             applyGravityToAllBoxes();
             rebuildPartDimensionMemory();
