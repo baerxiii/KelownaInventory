@@ -478,11 +478,15 @@
                             <option value="Self (Lead Tech)">Self (Lead Tech)</option>
                             <option value="3rd-Party Tech">3rd-Party Tech</option>
                         </select>
-                        <select id="log-action-select" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+                        <select id="log-action-select" onchange="togglePartRequestField()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
                             <option value="Checked Out / Pulled">Checked Out / Pulled</option>
-                            <option value="Moved / Restacked">Moved / Restacked</option>
                             <option value="Removed from Locker">Removed from Locker</option>
+                            <option value="Moved / Restacked">Moved / Restacked</option>
                         </select>
+                    </div>
+                    <div id="part-request-field-wrap">
+                        <label class="block text-[10px] uppercase tracking-wider text-amber-300/90 font-semibold mb-0.5">Part Request # (Pull / Checkout)</label>
+                        <input type="text" id="log-part-req-input" placeholder="e.g., PR-10482" class="w-full bg-slate-900 border border-amber-500/40 focus:border-amber-400 rounded-lg px-2.5 py-1.5 text-xs font-mono text-amber-200 placeholder-slate-500 outline-none">
                     </div>
                     <div class="flex gap-2">
                         <input type="text" id="log-note-input" placeholder="Work order or note..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
@@ -798,9 +802,13 @@ CREATE TABLE IF NOT EXISTS public."KelownaInventoryLogs" (
   action_type text NOT NULL,
   tag_id varchar(8) DEFAULT '--',
   part_name text NOT NULL,
+  part_request_number text DEFAULT '',
   note text DEFAULT '',
   created_at timestamptz DEFAULT now()
 );
+
+ALTER TABLE public."KelownaInventoryLogs"
+ADD COLUMN IF NOT EXISTS part_request_number text DEFAULT '';
 
 -- 3. Enable Row Level Security & open access policy
 ALTER TABLE public."KelownaInventory" ENABLE ROW LEVEL SECURITY;
@@ -1555,6 +1563,7 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                 action: row.action_type || 'Update',
                 tagId: row.tag_id || '--',
                 partName: row.part_name || '',
+                partRequestNumber: row.part_request_number || '',
                 note: cleanNote,
                 boxSnapshot: snapshot
             };
@@ -1758,6 +1767,7 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                 action_type: entry.action,
                 tag_id: entry.tagId,
                 part_name: entry.partName,
+                part_request_number: entry.partRequestNumber || '',
                 note: serializedNote
             }).then(function(res) {
                 if (res.error) console.warn('Log sync error:', res.error.message);
@@ -3701,16 +3711,43 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             showToast('Removed Box #' + removedTag + ' (' + removedName + ').', 'warning');
         }
 
+        function togglePartRequestField() {
+            var actionEl = document.getElementById('log-action-select');
+            var wrap = document.getElementById('part-request-field-wrap');
+            if (!actionEl || !wrap) return;
+            var act = actionEl.value || '';
+            var isPullOrRemove = act.indexOf('Checked Out') !== -1 || act.indexOf('Removed') !== -1;
+            if (isPullOrRemove) {
+                wrap.classList.remove('hidden');
+            } else {
+                wrap.classList.add('hidden');
+            }
+        }
+
         function submitBoxActivityLog() {
             var box = boxes.find(function(b) { return b.id === selectedBoxId; });
             if (!box) return;
 
             var tech = document.getElementById('log-tech-select').value;
             var action = document.getElementById('log-action-select').value;
+            var partReqInput = document.getElementById('log-part-req-input');
+            var partRequestNumber = partReqInput ? partReqInput.value.trim().toUpperCase() : '';
             var note = document.getElementById('log-note-input').value.trim();
 
-            recordActivity(tech, action, box.tagId, box.partName, note || 'Field update', box);
+            var isPullOrRemove = action.indexOf('Checked Out') !== -1 || action.indexOf('Removed') !== -1;
+            if (isPullOrRemove && !partRequestNumber) {
+                showToast('Please enter the Part Request # for this pull / removal.', 'warning');
+                if (partReqInput) partReqInput.focus();
+                return;
+            }
+
+            var combinedNote = partRequestNumber
+                ? ('Part Request #: ' + partRequestNumber + (note ? ' — ' + note : ''))
+                : (note || 'Field update');
+
+            recordActivity(tech, action, box.tagId, box.partName, combinedNote, box, partRequestNumber);
             document.getElementById('log-note-input').value = '';
+            if (partReqInput) partReqInput.value = '';
 
             if (action.indexOf('Removed') !== -1) {
                 pushUndoState('Remove Box #' + (box.tagId || '00'));
@@ -3730,7 +3767,7 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
             showToast('Logged ' + action + ' by ' + tech + '.', 'success');
         }
 
-        function recordActivity(tech, action, tagId, partName, note, boxSnapshot) {
+        function recordActivity(tech, action, tagId, partName, note, boxSnapshot, partRequestNumber) {
             var now = new Date();
             var timeStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
                           now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -3763,6 +3800,7 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                 action: action,
                 tagId: tagId || '--',
                 partName: partName,
+                partRequestNumber: partRequestNumber || '',
                 note: displayNote,
                 boxSnapshot: snapshot
             };
@@ -4096,6 +4134,9 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                     : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
 
                 var snap = item.boxSnapshot;
+                var prBadgeHtml = item.partRequestNumber
+                    ? '<span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">PR #' + escapeHtml(item.partRequestNumber) + '</span>'
+                    : '';
                 var dimBadgeHtml = snap
                     ? '<span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-emerald-300 border border-slate-700">' + snap.w + '×' + snap.d + '×' + snap.h + '"</span>'
                     : '';
@@ -4110,7 +4151,7 @@ ON public."KelownaInventoryBackups" FOR ALL USING (true) WITH CHECK (true);</pre
                     '<div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-xs space-y-1.5">' +
                         '<div class="flex items-center justify-between gap-2">' +
                             '<div class="flex items-center gap-1.5 flex-wrap">' +
-                                '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + badgeClass + '">' + escapeHtml(item.tech) + '</span>' +
+                                '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + badgeClass + '">' + escapeHtml(item.tech) + '</span>' + prBadgeHtml +
                                 dimBadgeHtml +
                             '</div>' +
                             '<span class="text-[10px] font-mono text-slate-500">' + escapeHtml(item.time) + '</span>' +
