@@ -2129,6 +2129,7 @@ $$;</pre>
             if (!box) return;
 
             var numVal = parseInt(val, 10);
+            if (isNaN(numVal)) return;
             var maxVal = axis === 'x' ? LOCKER_SIZE - box.w : axis === 'z' ? LOCKER_SIZE - box.d : LOCKER_SIZE - box.h;
             var clamped = Math.max(0, Math.min(maxVal, numVal));
 
@@ -2141,15 +2142,10 @@ $$;</pre>
                 box.z = resolved.z;
                 box.y = resolved.y;
             } else {
-                // Moving Y:
-                // - When raising Y, clear any overlapping box at or below targetY by lifting onto the
-                //   highest overlapping box's top (or targetY if higher and free), so you can stack onto
-                //   the top of any stack at (x, z).
-                // - When lowering Y, land on the highest supporting box top at or below targetY (or floor 0).
                 var targetY = clamped;
                 var movingUp = targetY >= prev.y;
 
-                // Collect all boxes overlapping in X/Z with this box
+                // All top surfaces (other.y + other.h) of boxes overlapping in X/Z
                 var colTops = [];
                 for (var i = 0; i < boxes.length; i++) {
                     var other = boxes[i];
@@ -2161,31 +2157,37 @@ $$;</pre>
                 colTops.sort(function(a, b) { return a - b; });
 
                 if (movingUp) {
-                    var candidateY = targetY;
-                    // If targetY collides with any box in this X/Z column, step up above that box's top
+                    // Find the highest top surface in this X/Z column that `box` collides with
+                    // at or below `targetY`, or snap to the top of the stack if dragging/pushing up
+                    var liftY = targetY;
                     for (var c = 0; c < colTops.length; c++) {
                         var top = colTops[c];
-                        if (candidateY < top && candidateY + box.h > (top - (boxes.find(function(b) { return b.id !== box.id && checkHorizontalOverlap(box, b) && (b.y + b.h) === top; }) || { h: 0 }).h)) {
-                            candidateY = top;
+                        if (top + box.h > LOCKER_SIZE) continue;
+                        var overlapsAtCandidate = !isValidPlacement(
+                            { x: box.x, y: liftY, z: box.z, w: box.w, d: box.d, h: box.h },
+                            box.id
+                        );
+                        if (overlapsAtCandidate && top > liftY) {
+                            liftY = top;
                         }
                     }
-                    candidateY = Math.max(0, Math.min(LOCKER_SIZE - box.h, candidateY));
-                    if (isValidPlacement({ x: box.x, y: candidateY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
-                        box.y = candidateY;
-                    } else {
-                        // Snap to highest non-colliding top in column
-                        var snappedUp = prev.y;
+
+                    // If dragging near the top of the range or still overlapping, jump to highest valid top in column
+                    if (!isValidPlacement({ x: box.x, y: liftY, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                        var highestValidTop = prev.y;
                         for (var s = colTops.length - 1; s >= 0; s--) {
-                            var t = colTops[s];
-                            if (t + box.h <= LOCKER_SIZE && isValidPlacement({ x: box.x, y: t, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
-                                snappedUp = t;
+                            var candidateTop = colTops[s];
+                            if (candidateTop + box.h <= LOCKER_SIZE && isValidPlacement({ x: box.x, y: candidateTop, z: box.z, w: box.w, d: box.d, h: box.h }, box.id)) {
+                                highestValidTop = candidateTop;
                                 break;
                             }
                         }
-                        box.y = snappedUp;
+                        box.y = highestValidTop;
+                    } else {
+                        box.y = liftY;
                     }
                 } else {
-                    // Moving down: rest on highest supporting top <= targetY, or targetY if unobstructed
+                    // Moving down: land on highest supporting top <= targetY, or floor 0
                     var supportBelow = 0;
                     for (var dIdx = 0; dIdx < colTops.length; dIdx++) {
                         if (colTops[dIdx] <= targetY && colTops[dIdx] + box.h <= LOCKER_SIZE) {
@@ -2203,12 +2205,14 @@ $$;</pre>
                 }
             }
 
-            document.getElementById('insp-x').value = box.x;
-            document.getElementById('insp-z').value = box.z;
-            document.getElementById('insp-y').value = box.y;
+            // Update value labels immediately without fighting active slider thumb drag on Y
             document.getElementById('insp-x-val').textContent = box.x + '"';
             document.getElementById('insp-z-val').textContent = box.z + '"';
             document.getElementById('insp-y-val').textContent = box.y + '"';
+
+            if (axis !== 'x') document.getElementById('insp-x').value = box.x;
+            if (axis !== 'z') document.getElementById('insp-z').value = box.z;
+            if (axis !== 'y') document.getElementById('insp-y').value = box.y;
 
             syncBoxesTo3D();
         }
